@@ -25,6 +25,7 @@
 	},
 	"packageClassList": [
 		"AppPlugin",
+		"CAPCameraPlugin",
 		"HapticsPlugin",
 		"KeyboardPlugin",
 		"SplashScreenPlugin",

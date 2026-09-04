@@ -35,6 +35,9 @@ import { TRANSLATIONS } from '../data/translations';
 import { validateContentModeration } from '../utils/moderation';
 import { CameraCaptureModal } from './CameraCaptureModal';
 import { compressAndResizeImage } from '../utils/imageCompressor';
+// Native camera / gallery (photo) via Capacitor on device; web keeps browser UI
+import { Capacitor } from '@capacitor/core';
+import { Camera as CapCamera, CameraSource, CameraResultType } from '@capacitor/camera';
 
 interface PendingRequest {
   id: string;
@@ -659,13 +662,47 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
       reader.readAsDataURL(file);
     });
 
-  // Camera: photo captured via the live camera modal
+  // Camera: photo captured via the live camera modal (web)
   const handleProofCameraPhoto = (dataUrl: string) => {
     setProofMedia({ kind: 'image', url: dataUrl });
     setIsProofCameraOpen(false);
     setProofMenu(null);
     setProofWarning(null);
     playSoundEffect('success');
+  };
+
+  // Native photo capture (camera or gallery) via @capacitor/camera — used only when
+  // the app runs inside the native Capacitor WebView. On web we fall back to the UI.
+  const captureNativeImage = async (source: CameraSource) => {
+    if (!Capacitor.isNativePlatform()) return;
+    playSoundEffect('select');
+    setProofMenu(null);
+    setProofWarning(null);
+    try {
+      const photo = await CapCamera.getPhoto({
+        resultType: CameraResultType.DataUrl,
+        source,
+        quality: 85,
+        width: 1400,
+        height: 1400,
+        correctOrientation: true,
+        saveToGallery: false,
+      });
+      if (photo?.dataUrl) {
+        setProofMedia({ kind: 'image', url: photo.dataUrl });
+        playSoundEffect('success');
+      }
+    } catch (err) {
+      const e = err as { code?: string; message?: string };
+      // User dismissed the native camera / gallery → no error to show
+      if (e?.code === 'userCancelledPhotos' || e?.code === 'userCancelled') return;
+      console.warn('Native capture error', e);
+      setProofWarning(
+        lang === 'FR'
+          ? "Impossible d'ouvrir l'appareil photo / la galerie. Vérifiez les permissions."
+          : 'Could not open camera / gallery. Please check permissions.'
+      );
+    }
   };
 
   // Camera / Gallery: image file picked
@@ -1634,9 +1671,13 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    playSoundEffect('select');
-                                    setProofMenu(null);
-                                    setIsProofCameraOpen(true);
+                                    if (Capacitor.isNativePlatform()) {
+                                      captureNativeImage(CameraSource.Camera);
+                                    } else {
+                                      playSoundEffect('select');
+                                      setProofMenu(null);
+                                      setIsProofCameraOpen(true);
+                                    }
                                   }}
                                   className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-xl bg-[#04140D] hover:bg-[#0b2e1e] border border-[#1b5638] hover:border-[#FF7A1A] text-white transition-all"
                                 >
@@ -1665,7 +1706,11 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
                                   onClick={() => {
                                     playSoundEffect('select');
                                     setProofMenu(null);
-                                    galImageRef.current?.click();
+                                    if (Capacitor.isNativePlatform()) {
+                                      captureNativeImage(CameraSource.Photos);
+                                    } else {
+                                      galImageRef.current?.click();
+                                    }
                                   }}
                                   className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-xl bg-[#04140D] hover:bg-[#0b2e1e] border border-[#1b5638] hover:border-[#FF7A1A] text-white transition-all"
                                 >
