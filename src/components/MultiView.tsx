@@ -714,6 +714,19 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
 
   const handleSubmitPlayerAnswer = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Mandatory visual proof for Action (Moument): cannot submit without it
+    if (activeType === 'action' && !proofMedia) {
+      playSoundEffect('fail');
+      setProofWarning(
+        lang === 'FR'
+          ? 'Une preuve visuelle (photo ou vidéo) est obligatoire pour valider ton action. Ajoute-la avant de soumettre.'
+          : 'Visual proof (photo or video) is required to validate your dare. Attach it before submitting.'
+      );
+      setProofMenu('cam');
+      return;
+    }
+
     if (!playerAnswer.trim()) return;
 
     // Content moderation check (Section 9.1)
@@ -728,7 +741,7 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
     playSoundEffect('select');
 
     // Notify participants in the room chat when a visual proof was attached
-    if (activeType === 'action' && proofMedia) {
+    if (proofMedia) {
       const activePlayer = players.find((p) => p.isTurn) || players[0];
       setChatMessages((prev) => [
         ...prev,
@@ -739,11 +752,11 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
           senderAvatar: '',
           text: proofMedia.kind === 'video'
             ? (lang === 'FR'
-                ? `🎥 ${activePlayer.name} a joint une vidéo de son action comme preuve.`
-                : `🎥 ${activePlayer.name} attached a video proof of their dare.`)
+                ? `🎥 ${activePlayer.name} a joint une vidéo de son ${activeType === 'action' ? 'action' : 'réponse'} comme preuve.`
+                : `🎥 ${activePlayer.name} attached a video proof${activeType === 'action' ? ' of their dare' : ' of their answer'}.`)
             : (lang === 'FR'
-                ? `📷 ${activePlayer.name} a joint une photo de son action comme preuve.`
-                : `📷 ${activePlayer.name} attached a photo proof of their dare.`),
+                ? `📷 ${activePlayer.name} a joint une photo de son ${activeType === 'action' ? 'action' : 'réponse'} comme preuve.`
+                : `📷 ${activePlayer.name} attached a photo proof${activeType === 'action' ? ' of their dare' : ' of their answer'}.`),
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           isSystem: true,
         },
@@ -1510,12 +1523,16 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
                       )}
                     </div>
 
-                    {/* ── VISUAL PROOF (photo/video) for ACTION (Moument) ── */}
-                    {activeType === 'action' && (
-                      <div className="rounded-xl sm:rounded-2xl border border-dashed border-[#FF7A1A]/45 bg-[#06170F] p-3 space-y-2.5 animate-in fade-in duration-150">
+                    {/* ── VISUAL PROOF (photo/video) for BOTH Action (Moument) and Truth (Gbê) ──
+                        Mandatory for Action, optional for Truth */}
+                    <div className="rounded-xl sm:rounded-2xl border border-dashed border-[#FF7A1A]/45 bg-[#06170F] p-3 space-y-2.5 animate-in fade-in duration-150">
                         <div className="flex items-center justify-between gap-2">
-                          <label className="text-[10px] font-black text-emerald-400 uppercase tracking-wider block font-mono">
-                            {lang === 'FR' ? 'AJOUTER UNE PREUVE VISUELLE (OPTIONNEL) :' : 'ADD VISUAL PROOF (OPTIONAL):'}
+                          <label className="text-[10px] font-black uppercase tracking-wider block font-mono">
+                            <span className={activeType === 'action' ? 'text-[#FF7A1A]' : 'text-emerald-400'}>
+                              {activeType === 'action'
+                                ? (lang === 'FR' ? 'PREUVE VISUELLE (OBLIGATOIRE) :' : 'VISUAL PROOF (REQUIRED):')
+                                : (lang === 'FR' ? 'AJOUTER UNE PREUVE VISUELLE (OPTIONNEL) :' : 'ADD VISUAL PROOF (OPTIONAL):')}
+                            </span>
                           </label>
                           {proofMedia && (
                             <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-300 bg-[#0b2e1e] border border-[#1b5638] px-2 py-0.5 rounded-full font-mono uppercase tracking-wide">
@@ -1527,10 +1544,20 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
                           )}
                         </div>
                         <p className="text-[10px] text-emerald-300/70 leading-snug">
-                          {lang === 'FR'
-                            ? 'Prends une photo ou filme ton action en direct (caméra) ou choisis un média depuis ta galerie pour prouver ton défi aux participants.'
-                            : 'Take a photo or record your dare live (camera), or pick an image/video from your gallery to prove your dare to participants.'}
+                          {activeType === 'action'
+                            ? (lang === 'FR'
+                                ? 'La preuve est obligatoire pour valider ton action : prends une photo ou filme en direct (caméra), ou choisis une image/vidéo depuis ta galerie pour prouver ton défi aux participants.'
+                                : 'Proof is required to validate your dare: take a photo or record live (camera), or pick an image/video from your gallery to prove your dare to participants.')
+                            : (lang === 'FR'
+                                ? 'Facultatif : joins une photo ou une vidéo à l’appui de ta vérité/réponse pour renforcer ta preuve devant les participants.'
+                                : 'Optional: attach a photo or video to back up your truth/answer as extra proof in front of participants.')}
                         </p>
+                        {activeType === 'action' && !proofMedia && (
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#FF8A3D] font-mono">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{lang === 'FR' ? 'Aucune preuve jointe : une preuve est requise pour soumettre ton action.' : 'No proof attached: proof is required to submit your dare.'}</span>
+                          </div>
+                        )}
 
                         {proofMedia ? (
                           <div className="relative overflow-hidden rounded-xl border border-[#164830] bg-black">
@@ -1667,7 +1694,6 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
                         <input ref={galImageRef} type="file" accept="image/*" className="hidden" onChange={handleProofImageFile} />
                         <input ref={galVideoRef} type="file" accept="video/*" className="hidden" onChange={handleProofVideoFile} />
                       </div>
-                    )}
 
                     <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-[#143B28]">
                       <button
@@ -1681,10 +1707,24 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
 
                       <button
                         type="submit"
-                        className="py-3 px-5 sm:px-6 bg-gradient-to-r from-[#9E3500] via-[#C94700] to-[#9E3500] hover:from-[#B84000] hover:to-[#B84000] text-white font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl shadow-[0_4px_20px_rgba(201,71,0,0.35)] border border-[#FFA559]/50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+                        disabled={activeType === 'action' && !proofMedia}
+                        className={`py-3 px-5 sm:px-6 font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 whitespace-nowrap transition-all ${
+                          activeType === 'action' && !proofMedia
+                            ? 'bg-[#123024] border border-[#1b5638] text-emerald-500/50 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-[#9E3500] via-[#C94700] to-[#9E3500] hover:from-[#B84000] hover:to-[#B84000] text-white shadow-[0_4px_20px_rgba(201,71,0,0.35)] border border-[#FFA559]/50 active:scale-[0.98]'
+                        }`}
+                        title={
+                          activeType === 'action' && !proofMedia
+                            ? (lang === 'FR' ? 'Une preuve visuelle est requise pour valider l’action.' : 'Visual proof is required to validate the dare.')
+                            : undefined
+                        }
                       >
                         <Send className="w-4 h-4 shrink-0" />
-                        <span>{lang === 'FR' ? 'SOUMETTRE AUX VOTES' : 'SUBMIT FOR VOTING'}</span>
+                        <span>
+                          {activeType === 'action' && !proofMedia
+                            ? (lang === 'FR' ? 'PREUVE REQUISE' : 'PROOF REQUIRED')
+                            : (lang === 'FR' ? 'SOUMETTRE AUX VOTES' : 'SUBMIT FOR VOTING')}
+                        </span>
                       </button>
                     </div>
                   </form>
@@ -1721,7 +1761,7 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
                     <p className="text-sm sm:text-base font-black text-white italic">“{playerAnswer}”</p>
 
                     {/* Visual proof visible to all participants during voting */}
-                    {proofMedia && activeType === 'action' && (
+                    {proofMedia && (
                       <div className="mt-3 text-left">
                         <div className="flex items-center justify-center gap-1.5 mb-1.5">
                           <span className="inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider font-mono px-2.5 py-1 rounded-full bg-[#E65A00]/20 border border-[#E65A00]/50 text-[#FFA559]">
