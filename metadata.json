@@ -1,0 +1,6 @@
+{
+  "name": "Gbê ou Moument",
+  "description": "Application interactive de jeu de soirée Vérité ou Action (Gbê ou Moument) adaptée pour mobile, tablette et ordinateur avec modes Solo, Multi, Avatars, Création IA et Bibliothèque.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
