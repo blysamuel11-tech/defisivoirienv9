@@ -12,7 +12,6 @@ import { AvatarView } from './components/AvatarView';
 import { BiblioView } from './components/BiblioView';
 import { PlusView } from './components/PlusView';
 import { Footer } from './components/Footer';
-import { MobileInstallBanner } from './components/MobileInstallBanner';
 import { MobileInstallModal } from './components/MobileInstallModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { AppSettingsModal } from './components/AppSettingsModal';
@@ -262,9 +261,6 @@ export default function App() {
           onLogout={handleLogout}
           onOpenInstallModal={() => setIsInstallModalOpen(true)}
         />
-
-        {/* Mobile PWA Install Banner */}
-        <MobileInstallBanner darkMode={settings.darkMode} />
 
         {/* Dynamic Content View Container */}
         <main className="w-full px-1 sm:px-4 pt-1 pb-24 sm:pb-8 flex-1 flex flex-col items-center">

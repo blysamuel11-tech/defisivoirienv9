@@ -8,6 +8,12 @@ import { CameraCaptureModal } from './CameraCaptureModal';
 import { GoogleSignInModal } from './GoogleSignInModal';
 import { validateContentModeration } from '../utils/moderation';
 import { compressAndResizeImage } from '../utils/imageCompressor';
+import {
+  PHONE_COUNTRIES,
+  CountryPhoneConfig,
+  validateAndFormatPhoneNumber,
+  extractOnlyDigits,
+} from '../utils/phoneCountries';
 
 interface AvatarViewProps {
   user: UserProfile;
@@ -24,6 +30,21 @@ const COLOR_AURAS = [
   { id: 'purple', name: 'Pourpre Royal', hex: '#A855F7', ring: 'ring-[#A855F7]' },
 ];
 
+// Helper to parse country code and digits from existing phone string
+function parseInitialPhone(fullPhoneStr?: string): { countryCode: string; formattedDigits: string } {
+  if (!fullPhoneStr) return { countryCode: 'CI', formattedDigits: '' };
+  const trimmed = fullPhoneStr.trim();
+  for (const c of PHONE_COUNTRIES) {
+    if (trimmed.startsWith(c.dialCode)) {
+      const rest = trimmed.slice(c.dialCode.length);
+      const digits = extractOnlyDigits(rest).slice(0, c.maxDigits);
+      return { countryCode: c.code, formattedDigits: c.formatMask(digits) };
+    }
+  }
+  const digits = extractOnlyDigits(trimmed);
+  return { countryCode: 'CI', formattedDigits: PHONE_COUNTRIES[0].formatMask(digits) };
+}
+
 export const AvatarView: React.FC<AvatarViewProps> = ({ user, onUpdateUser, onResetUser, onLogout, darkMode = true }) => {
   const [activeStep, setActiveStep] = useState<1 | 2>(1);
   const [name, setName] = useState(user.name);
@@ -31,11 +52,22 @@ export const AvatarView: React.FC<AvatarViewProps> = ({ user, onUpdateUser, onRe
   const [selectedAura, setSelectedAura] = useState(user.auraColor || 'orange');
   const [emailInput, setEmailInput] = useState(user.email || '');
   const [passwordInput, setPasswordInput] = useState('');
-  const [phoneInput, setPhoneInput] = useState(user.phone || '');
+  
+  const initialPhoneParsed = parseInitialPhone(user.phone);
+  const [phoneCountryCode, setPhoneCountryCode] = useState<string>(initialPhoneParsed.countryCode);
+  const [phoneInput, setPhoneInput] = useState(initialPhoneParsed.formattedDigits);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+
   const [showPassword, setShowPassword] = useState(false);
   const [showToast, setShowToast] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [moderationWarning, setModerationWarning] = useState<string | null>(null);
+
+  const currentCountry: CountryPhoneConfig =
+    PHONE_COUNTRIES.find((c) => c.code === phoneCountryCode) || PHONE_COUNTRIES[0];
+  const phoneDigitsCount = extractOnlyDigits(phoneInput).length;
+  const isPhoneValid =
+    phoneDigitsCount >= currentCountry.minDigits && phoneDigitsCount <= currentCountry.maxDigits;
 
   // Synchronize local input state with user profile changes or resets
   useEffect(() => {
@@ -43,7 +75,9 @@ export const AvatarView: React.FC<AvatarViewProps> = ({ user, onUpdateUser, onRe
     setSelectedAvatar(user.avatar || '');
     setSelectedAura(user.auraColor || 'orange');
     setEmailInput(user.email || '');
-    setPhoneInput(user.phone || '');
+    const parsed = parseInitialPhone(user.phone);
+    setPhoneCountryCode(parsed.countryCode);
+    setPhoneInput(parsed.formattedDigits);
   }, [user.name, user.avatar, user.auraColor, user.email, user.phone]);
 
   // Cropper states
@@ -141,12 +175,39 @@ export const AvatarView: React.FC<AvatarViewProps> = ({ user, onUpdateUser, onRe
     triggerToast('Email associé à votre profil !');
   };
 
+  const handlePhoneInputChange = (raw: string) => {
+    // Only accept digits according to standard
+    const digitsOnly = extractOnlyDigits(raw).slice(0, currentCountry.maxDigits);
+    const formatted = currentCountry.formatMask(digitsOnly);
+    setPhoneInput(formatted);
+    if (phoneError) setPhoneError(null);
+  };
+
+  const handleCountryChange = (newCode: string) => {
+    setPhoneCountryCode(newCode);
+    const targetCountry = PHONE_COUNTRIES.find((c) => c.code === newCode) || PHONE_COUNTRIES[0];
+    const digits = extractOnlyDigits(phoneInput).slice(0, targetCountry.maxDigits);
+    setPhoneInput(targetCountry.formatMask(digits));
+    if (phoneError) setPhoneError(null);
+  };
+
   const handleLinkPhone = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneInput) return;
+    if (!phoneInput) {
+      setPhoneError('Veuillez renseigner un numéro de téléphone.');
+      playSoundEffect('fail');
+      return;
+    }
+    const validation = validateAndFormatPhoneNumber(currentCountry, phoneInput);
+    if (!validation.isValid) {
+      setPhoneError(validation.errorMessage || 'Numéro non conforme.');
+      playSoundEffect('fail');
+      return;
+    }
+    setPhoneError(null);
     playSoundEffect('success');
-    onUpdateUser({ phone: phoneInput });
-    triggerToast('Numéro de téléphone vérifié !');
+    onUpdateUser({ phone: validation.fullInternationalNumber });
+    triggerToast(`Numéro enregistré : ${validation.fullInternationalNumber}`);
   };
 
   const triggerToast = (msg: string) => {
@@ -583,24 +644,102 @@ export const AvatarView: React.FC<AvatarViewProps> = ({ user, onUpdateUser, onRe
 
           {/* Phone link form */}
           <form onSubmit={handleLinkPhone} className={`space-y-2.5 pt-2 border-t ${darkMode ? 'border-[#143B28]' : 'border-gray-100'}`}>
-            <span
-              className={`text-[10px] font-black uppercase tracking-wider block font-mono ${
-                darkMode ? 'text-emerald-400' : 'text-gray-600'
-              }`}
-            >
-              LIAISON PAR NUMÉRO DE TÉLÉPHONE
-            </span>
-            <input
-              type="tel"
-              placeholder="+225 07 00 00 00 00"
-              value={phoneInput}
-              onChange={(e) => setPhoneInput(e.target.value)}
-              className={`w-full px-3.5 py-2.5 rounded-xl text-xs outline-none border ${
-                darkMode
-                  ? 'bg-[#04140D] border-[#16402C] focus:border-[#10B981] text-white placeholder:text-emerald-700'
-                  : 'bg-gray-50 border-gray-200 focus:border-[#10B981] text-gray-900 placeholder:text-gray-400'
-              }`}
-            />
+            <div className="flex items-center justify-between">
+              <span
+                className={`text-[10px] font-black uppercase tracking-wider block font-mono ${
+                  darkMode ? 'text-emerald-400' : 'text-gray-600'
+                }`}
+              >
+                LIAISON PAR NUMÉRO DE TÉLÉPHONE
+              </span>
+              <span className={`text-[10px] font-mono ${darkMode ? 'text-emerald-500/70' : 'text-gray-400'}`}>
+                Chiffres uniquement
+              </span>
+            </div>
+
+            {phoneError && (
+              <div className="p-2 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+                <span>{phoneError}</span>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              {/* Country selector */}
+              <div className="relative shrink-0 sm:w-[170px]">
+                <select
+                  value={phoneCountryCode}
+                  onChange={(e) => handleCountryChange(e.target.value)}
+                  className={`w-full px-3 py-2.5 rounded-xl text-xs font-mono outline-none cursor-pointer appearance-none pr-8 border transition-colors ${
+                    darkMode
+                      ? 'bg-[#04140D] border-[#16402C] focus:border-[#10B981] text-white'
+                      : 'bg-gray-50 border-gray-200 focus:border-[#10B981] text-gray-900'
+                  }`}
+                >
+                  {PHONE_COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code} className={darkMode ? 'bg-[#04140D] text-white' : 'bg-white text-gray-900'}>
+                      {c.flag} {c.name} ({c.dialCode})
+                    </option>
+                  ))}
+                </select>
+                <div className={`pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 ${darkMode ? 'text-emerald-400' : 'text-gray-500'}`}>
+                  <svg className="fill-current h-4 w-4" viewBox="0 0 20 20">
+                    <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Formatted phone input */}
+              <div className="flex-1 relative">
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9 ]*"
+                  placeholder={currentCountry.placeholder}
+                  value={phoneInput}
+                  onChange={(e) => handlePhoneInputChange(e.target.value)}
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-mono outline-none border transition-colors ${
+                    darkMode
+                      ? isPhoneValid
+                        ? 'bg-[#04140D] border-[#10B981] text-white placeholder:text-emerald-800'
+                        : 'bg-[#04140D] border-[#16402C] focus:border-[#10B981] text-white placeholder:text-emerald-800'
+                      : isPhoneValid
+                      ? 'bg-gray-50 border-[#10B981] text-gray-900 placeholder:text-gray-400'
+                      : 'bg-gray-50 border-gray-200 focus:border-[#10B981] text-gray-900 placeholder:text-gray-400'
+                  }`}
+                />
+                {isPhoneValid && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400 pointer-events-none flex items-center">
+                    <Check className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Standard info and counter */}
+            <div className="flex flex-wrap items-center justify-between gap-1.5 pt-0.5 text-[10px] sm:text-[11px] font-mono">
+              <span className={`text-[10px] ${darkMode ? 'text-emerald-400/90' : 'text-gray-600'}`}>
+                {currentCountry.ruleDescription}
+              </span>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded transition-colors ${
+                  isPhoneValid
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : phoneDigitsCount > 0
+                    ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                    : darkMode
+                    ? 'bg-white/5 text-gray-400 border border-white/10'
+                    : 'bg-gray-100 text-gray-500 border border-gray-200'
+                }`}
+              >
+                {phoneDigitsCount} /{' '}
+                {currentCountry.minDigits === currentCountry.maxDigits
+                  ? `${currentCountry.maxDigits}`
+                  : `${currentCountry.minDigits}-${currentCountry.maxDigits}`}{' '}
+                chiffres
+              </span>
+            </div>
+
             <button
               type="submit"
               className="w-full py-2.5 bg-[#10B981] hover:bg-[#059669] text-white font-black text-xs rounded-xl shadow-md transition-colors uppercase tracking-wider font-mono whitespace-nowrap cursor-pointer"

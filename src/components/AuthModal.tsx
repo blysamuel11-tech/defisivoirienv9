@@ -24,6 +24,12 @@ import { CameraCaptureModal } from './CameraCaptureModal';
 import { GoogleSignInModal } from './GoogleSignInModal';
 import { validateContentModeration } from '../utils/moderation';
 import { compressAndResizeImage } from '../utils/imageCompressor';
+import {
+  PHONE_COUNTRIES,
+  CountryPhoneConfig,
+  validateAndFormatPhoneNumber,
+  extractOnlyDigits,
+} from '../utils/phoneCountries';
 
 interface AuthModalProps {
   user: UserProfile;
@@ -59,6 +65,21 @@ function saveRegisteredAccount(identifier: string, profile: UserProfile) {
   }
 }
 
+// Helper to parse country code and digits from existing phone string
+function parseInitialPhone(fullPhoneStr?: string): { countryCode: string; formattedDigits: string } {
+  if (!fullPhoneStr) return { countryCode: 'CI', formattedDigits: '' };
+  const trimmed = fullPhoneStr.trim();
+  for (const c of PHONE_COUNTRIES) {
+    if (trimmed.startsWith(c.dialCode)) {
+      const rest = trimmed.slice(c.dialCode.length);
+      const digits = extractOnlyDigits(rest).slice(0, c.maxDigits);
+      return { countryCode: c.code, formattedDigits: c.formatMask(digits) };
+    }
+  }
+  const digits = extractOnlyDigits(trimmed);
+  return { countryCode: 'CI', formattedDigits: PHONE_COUNTRIES[0].formatMask(digits) };
+}
+
 export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose, darkMode = true }) => {
   const [view, setView] = useState<
     'welcome' | 'profile_setup' | 'email' | 'phone' | 'otp_verify'
@@ -75,9 +96,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose, da
   const [moderationWarning, setModerationWarning] = useState<string | null>(null);
 
   // Authentication inputs
+  const initialPhoneParsed = parseInitialPhone(user.phone);
   const [email, setEmail] = useState(user.email || '');
-  const [phone, setPhone] = useState(user.phone || '');
-  const [phoneCountry, setPhoneCountry] = useState('+225');
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>(initialPhoneParsed.countryCode);
+  const [phone, setPhone] = useState(initialPhoneParsed.formattedDigits);
   const [authMethod, setAuthMethod] = useState<'email' | 'phone' | 'google'>('email');
   const [authDestination, setAuthDestination] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
@@ -98,6 +120,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose, da
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  // Selected Country object & validation states
+  const currentCountry: CountryPhoneConfig =
+    PHONE_COUNTRIES.find((c) => c.code === selectedCountryCode) || PHONE_COUNTRIES[0];
+  const phoneDigitsCount = extractOnlyDigits(phone).length;
+  const isPhoneValid =
+    phoneDigitsCount >= currentCountry.minDigits && phoneDigitsCount <= currentCountry.maxDigits;
+
   // Resend cooldown timer countdown
   useEffect(() => {
     if (resendCooldown > 0) {
@@ -112,7 +141,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose, da
     setSelectedAvatar(user.avatar || '');
     setSelectedAura(user.auraColor || 'orange');
     setEmail(user.email || '');
-    setPhone(user.phone || '');
+    const parsed = parseInitialPhone(user.phone);
+    setSelectedCountryCode(parsed.countryCode);
+    setPhone(parsed.formattedDigits);
     setView('welcome');
   }, [user.id, user.name, user.avatar, user.auraColor, user.email, user.phone, user.isLoggedIn]);
 
@@ -178,17 +209,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose, da
     sendVerificationCode(cleanEmail, 'email');
   };
 
-  // Submit Phone phase
+  // Handlers for Phone Input adhering to country formatting & character type standard
+  const handlePhoneInputChange = (raw: string) => {
+    // Only accept numeric digits (filter non-digits strictly)
+    const digitsOnly = extractOnlyDigits(raw).slice(0, currentCountry.maxDigits);
+    const formatted = currentCountry.formatMask(digitsOnly);
+    setPhone(formatted);
+    if (authError) setAuthError(null);
+  };
+
+  const handleCountryChange = (newCode: string) => {
+    setSelectedCountryCode(newCode);
+    const targetCountry = PHONE_COUNTRIES.find((c) => c.code === newCode) || PHONE_COUNTRIES[0];
+    const digits = extractOnlyDigits(phone).slice(0, targetCountry.maxDigits);
+    setPhone(targetCountry.formatMask(digits));
+    if (authError) setAuthError(null);
+  };
+
+  // Submit Phone phase with strict country standards validation
   const handlePhoneSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanPhone = phone.trim().replace(/\s+/g, '');
-    if (cleanPhone.length < 6) {
-      setAuthError('Veuillez entrer un numéro de téléphone valide.');
+    const validation = validateAndFormatPhoneNumber(currentCountry, phone);
+    if (!validation.isValid) {
+      setAuthError(validation.errorMessage || 'Numéro de téléphone invalide selon les normes du pays.');
       playSoundEffect('fail');
       return;
     }
-    const fullNumber = `${phoneCountry} ${cleanPhone}`;
-    sendVerificationCode(fullNumber, 'phone');
+    sendVerificationCode(validation.fullInternationalNumber, 'phone');
   };
 
   // Handle Google Login Success
@@ -637,8 +684,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose, da
           </div>
 
           <p className="text-xs text-emerald-300/80 mb-4 font-mono">
-            Saisissez votre numéro de téléphone. Vous recevrez un code SMS de vérification
-            instantané sur votre appareil.
+            Saisissez votre numéro de téléphone. Un code de sécurité SMS de vérification
+            vous sera immédiatement envoyé selon les normes de votre pays.
           </p>
 
           {authError && (
@@ -648,41 +695,88 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose, da
             </div>
           )}
 
-          <div className="space-y-1 mb-5">
-            <label className="text-[10px] font-black text-emerald-300 uppercase tracking-wider block font-mono">
-              NUMÉRO DE TÉLÉPHONE
-            </label>
-            <div className="flex items-center gap-2">
-              <select
-                value={phoneCountry}
-                onChange={(e) => setPhoneCountry(e.target.value)}
-                className="px-2.5 py-2.5 bg-[#04140D] border border-[#16402C] rounded-xl text-white text-xs font-mono outline-none"
+          <div className="space-y-2 mb-5">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-black text-emerald-300 uppercase tracking-wider block font-mono">
+                PAYS & NUMÉRO DE TÉLÉPHONE
+              </label>
+              <span className="text-[10px] font-mono text-emerald-400/70">
+                Chiffres uniquement
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              {/* Country Selection Dropdown */}
+              <div className="relative shrink-0 sm:w-[190px]">
+                <select
+                  value={selectedCountryCode}
+                  onChange={(e) => handleCountryChange(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-[#04140D] border border-[#16402C] focus:border-[#10B981] rounded-xl text-white text-xs font-mono outline-none cursor-pointer appearance-none pr-8 transition-colors"
+                >
+                  {PHONE_COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code} className="bg-[#04140D] text-white">
+                      {c.flag} {c.name} ({c.dialCode})
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-emerald-400">
+                  <svg className="fill-current h-4 w-4" viewBox="0 0 20 20">
+                    <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Formatted Phone Input adhering to character type and country mask */}
+              <div className="flex-1 relative">
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9 ]*"
+                  placeholder={currentCountry.placeholder}
+                  value={phone}
+                  onChange={(e) => handlePhoneInputChange(e.target.value)}
+                  autoFocus
+                  className={`w-full px-3.5 py-2.5 bg-[#04140D] border rounded-xl text-white text-xs font-mono placeholder:text-emerald-800 outline-none transition-colors ${
+                    isPhoneValid
+                      ? 'border-[#10B981] focus:border-[#10B981] shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                      : 'border-[#16402C] focus:border-[#10B981]'
+                  }`}
+                  required
+                />
+                {isPhoneValid && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400 pointer-events-none flex items-center gap-1">
+                    <Check className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Country Standard Details & Character/Digit Counter */}
+            <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 text-[11px] font-mono">
+              <span className="text-emerald-400/90 text-[10px] sm:text-[11px] flex-1 min-w-[200px]">
+                {currentCountry.ruleDescription}
+              </span>
+              <span
+                className={`text-[10px] sm:text-[11px] font-bold shrink-0 px-2 py-0.5 rounded transition-colors ${
+                  isPhoneValid
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : phoneDigitsCount > 0
+                    ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                    : 'bg-white/5 text-gray-400 border border-white/10'
+                }`}
               >
-                <option value="+225">🇨🇮 +225</option>
-                <option value="+33">🇫🇷 +33</option>
-                <option value="+221">🇸🇳 +221</option>
-                <option value="+229">🇧🇯 +229</option>
-                <option value="+237">🇨🇲 +237</option>
-                <option value="+1">🇺🇸 +1</option>
-              </select>
-              <input
-                type="tel"
-                placeholder="07 00 00 00 00"
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value);
-                  if (authError) setAuthError(null);
-                }}
-                autoFocus
-                className="flex-1 px-3.5 py-2.5 bg-[#04140D] border border-[#16402C] focus:border-[#10B981] rounded-xl text-white text-xs placeholder:text-emerald-700 outline-none transition-colors"
-                required
-              />
+                {phoneDigitsCount} /{' '}
+                {currentCountry.minDigits === currentCountry.maxDigits
+                  ? `${currentCountry.maxDigits}`
+                  : `${currentCountry.minDigits}-${currentCountry.maxDigits}`}{' '}
+                chiffres
+              </span>
             </div>
           </div>
 
           <button
             type="submit"
-            className="w-full py-3 bg-gradient-to-r from-[#10B981] via-[#059669] to-[#10B981] hover:from-[#34D399] hover:to-[#10B981] text-white font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl shadow-[0_4px_20px_rgba(16,185,129,0.35)] border border-[#6EE7B7]/40 active:scale-[0.98] transition-all whitespace-nowrap"
+            className="w-full py-3 bg-gradient-to-r from-[#10B981] via-[#059669] to-[#10B981] hover:from-[#34D399] hover:to-[#10B981] text-white font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl shadow-[0_4px_20px_rgba(16,185,129,0.35)] border border-[#6EE7B7]/40 active:scale-[0.98] transition-all whitespace-nowrap cursor-pointer"
           >
             RECEVOIR LE CODE SMS
           </button>
