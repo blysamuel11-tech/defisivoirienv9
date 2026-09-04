@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { ArrowLeft, ChevronDown, Check, Info, RotateCw, Camera, Video, Upload, Sparkles, Trophy, ArrowRight, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Check, Info, RotateCw, Camera, Video, Upload, Sparkles, Trophy, ArrowRight, AlertCircle, Volume2, User } from 'lucide-react';
 import { Challenge, ChallengeType, Intensity, UserProfile, GameHistoryItem } from '../types';
-import { playSoundEffect } from '../utils/audio';
+import { playSoundEffect, speakVoice } from '../utils/audio';
 import { TRANSLATIONS } from '../data/translations';
 import { validateContentModeration } from '../utils/moderation';
 import { compressAndResizeImage } from '../utils/imageCompressor';
+import { CameraCaptureModal } from './CameraCaptureModal';
 
 interface SoloViewProps {
   user: UserProfile;
@@ -38,7 +39,6 @@ export const SoloView: React.FC<SoloViewProps> = ({
     points: number;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
 
   const t = TRANSLATIONS[lang];
 
@@ -77,6 +77,10 @@ export const SoloView: React.FC<SoloViewProps> = ({
     setProofMedia(null);
     setModerationWarning(null);
     setCurrentStep(2);
+    if (chosen) {
+      const textToRead = lang === 'EN' && chosen.textEn ? chosen.textEn : chosen.text;
+      speakVoice(textToRead, lang);
+    }
   };
 
   // Passer : ne fait pas sortir l'utilisateur de l'écran ; charge immédiatement un nouveau défi du même type avec "Vérité passée 0 point" ou "Action passée 0 point"
@@ -179,39 +183,9 @@ export const SoloView: React.FC<SoloViewProps> = ({
     }
   };
 
-  const handleStartCamera = async () => {
-    try {
-      setIsCapturingCamera(true);
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-    } catch (err) {
-      console.warn('Camera access denied or unavailable', err);
-      setIsCapturingCamera(false);
-      setProofMedia('https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400&auto=format&fit=crop&q=80');
-      playSoundEffect('notification');
-    }
-  };
-
-  const handleSnapPhoto = async () => {
-    if (videoRef.current) {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth || 320;
-      canvas.height = videoRef.current.videoHeight || 240;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        const compressed = await compressAndResizeImage(dataUrl);
-        setProofMedia(compressed);
-        playSoundEffect('success');
-      }
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream?.getTracks().forEach((trk) => trk.stop());
-      setIsCapturingCamera(false);
-    }
+  const handleStartCamera = () => {
+    playSoundEffect('select');
+    setIsCapturingCamera(true);
   };
 
   const displayedChallengeText = currentChallenge
@@ -234,16 +208,20 @@ export const SoloView: React.FC<SoloViewProps> = ({
               borderColor: user.auraColor === 'green' ? '#10B981' : user.auraColor === 'teal' ? '#06B6D4' : user.auraColor === 'purple' ? '#A855F7' : '#E65A00',
               boxShadow: `0 0 12px ${user.auraColor === 'green' ? '#10B981' : user.auraColor === 'teal' ? '#06B6D4' : user.auraColor === 'purple' ? '#A855F7' : '#E65A00'}40`,
             }}
-            className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-full border-2 p-0.5 overflow-hidden shrink-0 transition-all ${
+            className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-full border-2 p-0.5 overflow-hidden shrink-0 transition-all flex items-center justify-center ${
               darkMode ? 'bg-[#04140D]' : 'bg-gray-100'
             }`}
           >
-            <img
-              src={user.avatar}
-              alt="Avatar"
-              className="w-full h-full object-cover rounded-full"
-              referrerPolicy="no-referrer"
-            />
+            {user.avatar && user.avatar.trim() ? (
+              <img
+                src={user.avatar}
+                alt="Avatar"
+                className="w-full h-full object-cover rounded-full"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <User className="w-6 h-6 text-emerald-400 opacity-60" />
+            )}
           </div>
           <div className="min-w-0">
             <span
@@ -563,7 +541,7 @@ export const SoloView: React.FC<SoloViewProps> = ({
           )}
 
           {/* Question or Dare Prompt */}
-          <div className="my-3 sm:my-5 text-center">
+          <div className="my-3 sm:my-5 text-center flex flex-col items-center">
             <h2
               className={`text-lg sm:text-2xl md:text-3xl font-black italic font-display leading-snug tracking-tight px-1 sm:px-2 ${
                 darkMode ? 'text-white' : 'text-[#111827]'
@@ -571,6 +549,18 @@ export const SoloView: React.FC<SoloViewProps> = ({
             >
               “{displayedChallengeText}”
             </h2>
+            <button
+              type="button"
+              onClick={() => {
+                playSoundEffect('click');
+                speakVoice(displayedChallengeText, lang);
+              }}
+              className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#E65A00]/15 hover:bg-[#E65A00]/25 text-[#FF7A1A] border border-[#FF7A1A]/30 active:scale-95 transition-all cursor-pointer select-none"
+              title={lang === 'FR' ? 'Lire à voix haute' : 'Read aloud'}
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>{lang === 'FR' ? 'Écouter la voix' : 'Listen voice'}</span>
+            </button>
           </div>
 
           {/* Vérité Input Area */}
@@ -612,30 +602,19 @@ export const SoloView: React.FC<SoloViewProps> = ({
                 className="hidden"
               />
 
-              {isCapturingCamera ? (
+              {proofMedia && proofMedia.trim() ? (
                 <div
-                  className={`w-full flex flex-col items-center rounded-2xl p-3 overflow-hidden border ${
-                    darkMode ? 'bg-[#04140D] border-[#10B981]' : 'bg-gray-50 border-[#10B981]'
-                  }`}
-                >
-                  <video ref={videoRef} className="w-full max-h-48 object-cover rounded-xl mb-3" />
-                  <button
-                    onClick={handleSnapPhoto}
-                    className="py-2 px-5 bg-gradient-to-r from-[#047857] to-[#10B981] text-white font-black text-xs rounded-xl shadow-md uppercase tracking-wider"
-                  >
-                    {t.openCamera}
-                  </button>
-                </div>
-              ) : proofMedia ? (
-                <div
-                  className={`relative w-full rounded-2xl border-2 border-[#10B981] overflow-hidden max-h-48 flex items-center justify-center p-2 ${
+                  className={`relative w-full rounded-2xl border-2 border-[#10B981] overflow-hidden max-h-56 flex items-center justify-center p-2 ${
                     darkMode ? 'bg-[#04140D]' : 'bg-gray-50'
                   }`}
                 >
-                  <img src={proofMedia} alt="Preuve" className="max-h-44 object-contain rounded-xl" />
+                  <img src={proofMedia} alt="Preuve de défi" className="max-h-52 object-contain rounded-xl" />
                   <button
-                    onClick={() => setProofMedia(null)}
-                    className="absolute top-2 right-2 px-2.5 py-1 bg-red-600/90 text-white font-bold text-xs rounded-lg shadow-md uppercase tracking-wider"
+                    onClick={() => {
+                      setProofMedia(null);
+                      playSoundEffect('select');
+                    }}
+                    className="absolute top-2 right-2 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg shadow-md uppercase tracking-wider cursor-pointer transition-colors"
                   >
                     Supprimer
                   </button>
@@ -653,8 +632,8 @@ export const SoloView: React.FC<SoloViewProps> = ({
                       darkMode ? 'text-emerald-400/80' : 'text-gray-500'
                     }`}
                   >
-                    <Camera className="w-5 h-5" />
-                    <Video className="w-5 h-5" />
+                    <Camera className="w-5 h-5 text-[#10B981]" />
+                    <Video className="w-5 h-5 text-[#FF7A1A]" />
                   </div>
                   <span
                     className={`text-xs sm:text-sm font-black tracking-wider block mb-2 font-mono ${
@@ -666,7 +645,7 @@ export const SoloView: React.FC<SoloViewProps> = ({
                   <div className="flex gap-2">
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className={`px-3 py-1.5 border font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all whitespace-nowrap font-mono ${
+                      className={`px-3 py-1.5 border font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all whitespace-nowrap font-mono cursor-pointer ${
                         darkMode
                           ? 'bg-[#0a2e1d] hover:bg-[#0f442b] border-[#1a5337] text-white'
                           : 'bg-white hover:bg-gray-100 border-gray-200 text-gray-800 shadow-sm'
@@ -677,7 +656,7 @@ export const SoloView: React.FC<SoloViewProps> = ({
                     </button>
                     <button
                       onClick={handleStartCamera}
-                      className={`px-3 py-1.5 border font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all whitespace-nowrap font-mono ${
+                      className={`px-3 py-1.5 border font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all whitespace-nowrap font-mono cursor-pointer ${
                         darkMode
                           ? 'bg-[#0a2e1d] hover:bg-[#0f442b] border-[#1a5337] text-white'
                           : 'bg-white hover:bg-gray-100 border-gray-200 text-gray-800 shadow-sm'
@@ -726,6 +705,21 @@ export const SoloView: React.FC<SoloViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Live Device Camera Modal for Solo Challenge Proof */}
+      <CameraCaptureModal
+        isOpen={isCapturingCamera}
+        onClose={() => setIsCapturingCamera(false)}
+        onCapture={(dataUrl) => {
+          setProofMedia(dataUrl);
+          setIsCapturingCamera(false);
+          playSoundEffect('success');
+        }}
+        title="Appareil photo - Preuve de défi"
+        subtitle="Prends en photo la preuve de réalisation de ton défi"
+        aspectRatio="video"
+        darkMode={darkMode}
+      />
     </div>
   );
 };

@@ -4,6 +4,7 @@ import { UserProfile } from '../types';
 import { INITIAL_AVATARS } from '../data/initialData';
 import { playSoundEffect } from '../utils/audio';
 import { ImageCropModal } from './ImageCropModal';
+import { CameraCaptureModal } from './CameraCaptureModal';
 import { GoogleSignInModal } from './GoogleSignInModal';
 import { validateContentModeration } from '../utils/moderation';
 import { compressAndResizeImage } from '../utils/imageCompressor';
@@ -47,6 +48,7 @@ export const AvatarView: React.FC<AvatarViewProps> = ({ user, onUpdateUser, onRe
 
   // Cropper states
   const [isCropperOpen, setIsCropperOpen] = useState(false);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string>(selectedAvatar || '');
 
   // Google sign in modal state
@@ -335,7 +337,7 @@ export const AvatarView: React.FC<AvatarViewProps> = ({ user, onUpdateUser, onRe
                     darkMode ? 'bg-[#04140D]' : 'bg-gray-100'
                   }`}
                 >
-                  {selectedAvatar ? (
+                  {selectedAvatar && selectedAvatar.trim() ? (
                     <img
                       src={selectedAvatar}
                       alt="Selected Avatar"
@@ -365,8 +367,8 @@ export const AvatarView: React.FC<AvatarViewProps> = ({ user, onUpdateUser, onRe
               <div className="flex items-center gap-1.5 pt-1">
                 <button
                   type="button"
-                  onClick={() => cameraInputRef.current?.click()}
-                  title="Prendre une photo"
+                  onClick={() => setIsCameraModalOpen(true)}
+                  title="Ouvrir la caméra de l'appareil"
                   className={`py-1 px-2 border rounded-lg text-[10px] font-mono font-bold flex items-center gap-1 transition-colors cursor-pointer ${
                     darkMode
                       ? 'bg-[#04140D] hover:bg-[#072517] border-[#164830] hover:border-[#10B981] text-emerald-300'
@@ -631,6 +633,22 @@ export const AvatarView: React.FC<AvatarViewProps> = ({ user, onUpdateUser, onRe
         auraColor={selectedAura}
         onConfirm={handleCropperConfirm}
         onCancel={() => setIsCropperOpen(false)}
+      />
+
+      {/* Live Device Camera Capture Modal */}
+      <CameraCaptureModal
+        isOpen={isCameraModalOpen}
+        onClose={() => setIsCameraModalOpen(false)}
+        onCapture={(dataUrl) => {
+          setSelectedAvatar(dataUrl);
+          setImageToCrop(dataUrl);
+          setIsCropperOpen(true);
+          triggerToast('Photo capturée avec succès !');
+        }}
+        title="Appareil photo - Avatar"
+        subtitle="Cadre ton visage puis appuie sur le bouton pour capturer"
+        aspectRatio="square"
+        darkMode={darkMode}
       />
 
       {/* Google / Gmail Sign-In Modal */}

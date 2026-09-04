@@ -10,8 +10,10 @@ import {
   Check,
   RotateCcw,
   Sparkles,
+  User,
 } from 'lucide-react';
 import { playSoundEffect } from '../utils/audio';
+import { CameraCaptureModal } from './CameraCaptureModal';
 
 interface ImageCropModalProps {
   isOpen: boolean;
@@ -34,6 +36,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
   const [rotation, setRotation] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
 
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -231,21 +234,28 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
             className="relative w-[260px] h-[260px] rounded-2xl sm:rounded-3xl bg-[#030d08] border-2 border-[#164830] overflow-hidden cursor-grab active:cursor-grabbing touch-none flex items-center justify-center shadow-inner"
           >
             {/* The Image inside */}
-            <img
-              ref={imgRef}
-              src={currentImageSrc}
-              alt="Crop Target"
-              crossOrigin="anonymous"
-              draggable={false}
-              style={{
-                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`,
-                transition: isDragging ? 'none' : 'transform 0.15s ease-out',
-                maxWidth: '100%',
-                maxHeight: '100%',
-                objectFit: 'contain',
-              }}
-              className="pointer-events-none select-none"
-            />
+            {currentImageSrc && currentImageSrc.trim() ? (
+              <img
+                ref={imgRef}
+                src={currentImageSrc}
+                alt="Crop Target"
+                crossOrigin="anonymous"
+                draggable={false}
+                style={{
+                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`,
+                  transition: isDragging ? 'none' : 'transform 0.15s ease-out',
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  objectFit: 'contain',
+                }}
+                className="pointer-events-none select-none"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center text-emerald-400/50 p-4 text-center">
+                <User className="w-12 h-12 mb-2 opacity-40" />
+                <span className="text-xs font-mono">Sélectionnez une image</span>
+              </div>
+            )}
 
             {/* Framing Mask Overlay (Circle & Grid) */}
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
@@ -336,8 +346,8 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
             <div className="flex items-center justify-between gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => cameraInputRef.current?.click()}
-                className="flex-1 py-1.5 px-2.5 bg-[#072015] border border-[#164830] hover:border-[#10B981] rounded-lg text-white text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors uppercase font-mono"
+                onClick={() => setIsCameraModalOpen(true)}
+                className="flex-1 py-1.5 px-2.5 bg-[#072015] border border-[#164830] hover:border-[#10B981] rounded-lg text-white text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors uppercase font-mono cursor-pointer"
               >
                 <Camera className="w-3.5 h-3.5 text-[#10B981]" />
                 <span>Prendre photo</span>
@@ -392,6 +402,22 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Camera Capture Modal inside Cropper */}
+      <CameraCaptureModal
+        isOpen={isCameraModalOpen}
+        onClose={() => setIsCameraModalOpen(false)}
+        onCapture={(dataUrl) => {
+          setCurrentImageSrc(dataUrl);
+          setZoom(1);
+          setPan({ x: 0, y: 0 });
+          setRotation(0);
+        }}
+        title="Prendre une photo"
+        subtitle="Cadre la photo puis valide le résultat"
+        aspectRatio="square"
+        darkMode={true}
+      />
     </div>
   );
 };

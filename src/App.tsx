@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { GameTab, UserProfile, Challenge, GameHistoryItem, AppNotification, AppSettings } from './types';
 import { INITIAL_USER, INITIAL_CHALLENGES, INITIAL_NOTIFICATIONS } from './data/initialData';
 import { getGlobalRank } from './data/translations';
+import { configureAudioSettings, setUserAudioSessionState, stopAllAudioAndVoice } from './utils/audio';
 import { Header } from './components/Header';
 import { AuthModal } from './components/AuthModal';
 import { SoloView } from './components/SoloView';
@@ -14,9 +15,11 @@ import { Footer } from './components/Footer';
 import { MobileInstallBanner } from './components/MobileInstallBanner';
 import { MobileInstallModal } from './components/MobileInstallModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { AppSettingsModal } from './components/AppSettingsModal';
 
 export default function App() {
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState<GameTab>(() => {
     try {
       if (typeof window !== 'undefined') {
@@ -40,6 +43,9 @@ export default function App() {
         // Wipe legacy mock profiles
         if (parsed.name === 'FF' || !parsed.hasProfile) {
           return INITIAL_USER;
+        }
+        if (!parsed.avatar || typeof parsed.avatar !== 'string' || !parsed.avatar.trim()) {
+          parsed.avatar = INITIAL_USER.avatar;
         }
         return parsed;
       }
@@ -66,15 +72,40 @@ export default function App() {
 
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('gbe_settings');
-    return saved
-      ? JSON.parse(saved)
-      : {
-          darkMode: true,
-          soundEnabled: false,
-          musicVolume: 0.3,
-          language: 'FR',
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          darkMode: parsed.darkMode !== undefined ? parsed.darkMode : true,
+          soundEnabled: parsed.soundEnabled !== undefined ? parsed.soundEnabled : true,
+          vibrationEnabled: parsed.vibrationEnabled !== undefined ? parsed.vibrationEnabled : true,
+          popMusicEnabled: parsed.popMusicEnabled !== undefined ? parsed.popMusicEnabled : false,
+          language: parsed.language || 'FR',
         };
+      } catch {}
+    }
+    return {
+      darkMode: true,
+      soundEnabled: true,
+      vibrationEnabled: true,
+      popMusicEnabled: false,
+      language: 'FR',
+    };
   });
+
+  // Keep Audio & Haptics in sync with settings
+  useEffect(() => {
+    configureAudioSettings({
+      soundEnabled: settings.soundEnabled,
+      vibrationEnabled: settings.vibrationEnabled,
+      voiceEnabled: settings.soundEnabled,
+    });
+  }, [settings.soundEnabled, settings.vibrationEnabled]);
+
+  // Keep Pop Ambient Music & session state in sync with setting and login status
+  useEffect(() => {
+    setUserAudioSessionState(Boolean(user.isLoggedIn), Boolean(settings.popMusicEnabled));
+  }, [user.isLoggedIn, settings.popMusicEnabled]);
 
   // Save to localStorage on updates
   useEffect(() => {
@@ -149,12 +180,18 @@ export default function App() {
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
   };
 
+  const handleDeleteNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
   const handleLogout = () => {
+    stopAllAudioAndVoice();
     setUser((prev) => ({ ...prev, isLoggedIn: false }));
     setCurrentTab('solo');
   };
 
   const handleResetUser = () => {
+    stopAllAudioAndVoice();
     localStorage.removeItem('gbe_user');
     localStorage.removeItem('gbe_user_profile');
     localStorage.removeItem('gbe_accounts');
@@ -190,15 +227,24 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen w-full flex flex-col items-center justify-start transition-colors duration-300 relative cyber-grid-bg ${
-        settings.darkMode ? 'bg-[#030e09] text-white' : 'bg-[#061e14] text-emerald-50'
+      className={`min-h-screen w-full flex flex-col items-center justify-start transition-colors duration-300 relative ${
+        settings.darkMode ? 'bg-[#030e09] text-white cyber-grid-bg' : 'bg-[#F4F6F5] text-gray-900 light-grid-bg'
       }`}
     >
       {/* Background ambient radial gradients matching futuristic game theme */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[650px] sm:w-[800px] h-[500px] bg-gradient-to-b from-[#FF6A00]/15 via-[#E65A00]/5 to-transparent rounded-full filter blur-[120px]" />
-        <div className="absolute bottom-0 right-0 w-[450px] sm:w-[600px] h-[450px] bg-gradient-to-t from-[#10B981]/12 via-[#059669]/5 to-transparent rounded-full filter blur-[110px]" />
-        <div className="absolute top-1/3 left-0 w-[350px] h-[350px] bg-gradient-to-r from-[#10B981]/8 to-transparent rounded-full filter blur-[90px]" />
+        {settings.darkMode ? (
+          <>
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[650px] sm:w-[800px] h-[500px] bg-gradient-to-b from-[#FF6A00]/15 via-[#E65A00]/5 to-transparent rounded-full filter blur-[120px]" />
+            <div className="absolute bottom-0 right-0 w-[450px] sm:w-[600px] h-[450px] bg-gradient-to-t from-[#10B981]/12 via-[#059669]/5 to-transparent rounded-full filter blur-[110px]" />
+            <div className="absolute top-1/3 left-0 w-[350px] h-[350px] bg-gradient-to-r from-[#10B981]/8 to-transparent rounded-full filter blur-[90px]" />
+          </>
+        ) : (
+          <>
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[650px] sm:w-[800px] h-[400px] bg-gradient-to-b from-[#FF6A00]/10 via-transparent to-transparent rounded-full filter blur-[120px]" />
+            <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-gradient-to-t from-emerald-400/10 via-transparent to-transparent rounded-full filter blur-[110px]" />
+          </>
+        )}
       </div>
 
       {/* Main Responsive Wrapper */}
@@ -209,6 +255,7 @@ export default function App() {
           onSelectTab={setCurrentTab}
           notifications={notifications}
           onMarkNotificationsRead={handleMarkNotificationsRead}
+          onDeleteNotification={handleDeleteNotification}
           settings={settings}
           onUpdateSettings={(s) => setSettings((prev) => ({ ...prev, ...s }))}
           user={user}
@@ -253,6 +300,7 @@ export default function App() {
                     onLogHistory={handleLogHistory}
                     challenges={challenges}
                     lang={settings.language}
+                    darkMode={settings.darkMode}
                   />
                 )}
 
@@ -262,6 +310,7 @@ export default function App() {
                     challenges={challenges}
                     onUpdateScore={handleUpdateScore}
                     lang={settings.language}
+                    darkMode={settings.darkMode}
                   />
                 )}
 
@@ -290,7 +339,13 @@ export default function App() {
                   />
                 )}
 
-                {currentTab === 'plus' && <PlusView lang={settings.language} />}
+                {currentTab === 'plus' && (
+                  <PlusView
+                    lang={settings.language}
+                    darkMode={settings.darkMode}
+                    onOpenSettings={() => setIsSettingsModalOpen(true)}
+                  />
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -314,6 +369,16 @@ export default function App() {
           isOpen={isInstallModalOpen}
           onClose={() => setIsInstallModalOpen(false)}
           darkMode={settings.darkMode}
+        />
+
+        {/* App Settings Modal (Global) */}
+        <AppSettingsModal
+          isOpen={isSettingsModalOpen}
+          onClose={() => setIsSettingsModalOpen(false)}
+          settings={settings}
+          onUpdateSettings={(s) => setSettings((prev) => ({ ...prev, ...s }))}
+          onLogout={handleLogout}
+          user={user}
         />
       </div>
     </div>

@@ -70,10 +70,15 @@ export interface AppNotification {
   icon?: string;
   date: string;
   unread: boolean;
+  targetTab?: GameTab;
+  actionType?: 'open_tab' | 'open_settings' | 'open_install';
+  actionTarget?: string;
 }
 
 export interface AppSettings {
   darkMode: boolean;
   soundEnabled: boolean;
+  vibrationEnabled: boolean;
+  popMusicEnabled: boolean;
   language: 'FR' | 'EN';
 }

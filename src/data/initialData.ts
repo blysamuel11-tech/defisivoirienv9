@@ -1,9 +1,12 @@
 import { Challenge, AppNotification, UserProfile } from '../types';
 
+export const DEFAULT_AVATAR =
+  'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=300&auto=format&fit=crop&q=80';
+
 export const INITIAL_USER: UserProfile = {
   id: 'user-default',
   name: '',
-  avatar: '',
+  avatar: DEFAULT_AVATAR,
   auraColor: 'orange',
   score: 0,
   rank: 'NOVICE',
@@ -15,7 +18,7 @@ export const INITIAL_AVATARS = [
   {
     id: 'cat-sunglasses',
     name: 'Cool Cat',
-    url: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=300&auto=format&fit=crop&q=80',
+    url: DEFAULT_AVATAR,
     tags: ['Lunettes', 'Stylé', 'Félin']
   },
   {
@@ -198,16 +201,38 @@ export const INITIAL_CHALLENGES: Challenge[] = [
 export const INITIAL_NOTIFICATIONS: AppNotification[] = [
   {
     id: 'notif-1',
-    title: 'MISE À JOUR DISPONIBLE !',
-    description: 'Une nouvelle version est arrivée avec plus de défis, d’avatars et l’intelligence artificielle intégrée.',
+    title: 'MISE À JOUR STORE DISPONIBLE !',
+    description: 'Une nouvelle version officielle v2.2.0 est prête sur Play Store et App Store. Clique pour vérifier !',
     date: 'Aujourd’hui',
-    unread: true
+    unread: true,
+    targetTab: 'plus',
+    actionType: 'open_settings',
   },
   {
     id: 'notif-2',
-    title: 'NOUVEAU MODE MULTIJOUEUR EN LIGNE',
+    title: 'MODE MULTIJOUEUR EN LIGNE',
     description: 'Crée un salon de jeu en direct avec tes amis et partagez vos confessions instantanées !',
+    date: 'Aujourd’hui',
+    unread: true,
+    targetTab: 'multi',
+    actionType: 'open_tab',
+  },
+  {
+    id: 'notif-3',
+    title: 'NOUVEAUX DÉFIS DANS LA BIBLIOTHÈQUE',
+    description: 'Découvre les défis favoris et ajoute tes propres vérités et actions personnalisées !',
     date: 'Hier',
-    unread: true
-  }
+    unread: true,
+    targetTab: 'biblio',
+    actionType: 'open_tab',
+  },
+  {
+    id: 'notif-4',
+    title: 'PERSONNALISE TON AVATAR & AURA',
+    description: 'Choisis ton style de profil, ton aura énergétique et brille lors de tes parties !',
+    date: 'Il y a 2 jours',
+    unread: false,
+    targetTab: 'avatar',
+    actionType: 'open_tab',
+  },
 ];

@@ -20,6 +20,7 @@ import { UserProfile } from '../types';
 import { INITIAL_AVATARS } from '../data/initialData';
 import { playSoundEffect } from '../utils/audio';
 import { ImageCropModal } from './ImageCropModal';
+import { CameraCaptureModal } from './CameraCaptureModal';
 import { GoogleSignInModal } from './GoogleSignInModal';
 import { validateContentModeration } from '../utils/moderation';
 import { compressAndResizeImage } from '../utils/imageCompressor';
@@ -58,7 +59,7 @@ function saveRegisteredAccount(identifier: string, profile: UserProfile) {
   }
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose, darkMode = true }) => {
   const [view, setView] = useState<
     'welcome' | 'profile_setup' | 'email' | 'phone' | 'otp_verify'
   >('welcome');
@@ -90,6 +91,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose }) 
 
   // Image Cropper Modal State
   const [isCropperOpen, setIsCropperOpen] = useState(false);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string>(selectedAvatar);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -441,7 +443,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose }) 
             }}
             className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 p-0.5 mb-3 overflow-hidden bg-[#04140D] transition-all flex items-center justify-center"
           >
-            {user.hasProfile && user.avatar ? (
+            {user.hasProfile && user.avatar && user.avatar.trim() ? (
               <img
                 src={user.avatar}
                 alt="Avatar"
@@ -476,51 +478,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose }) 
           <div className="w-full space-y-2.5">
             {/* Quick Start / Re-connect button */}
             {user.hasProfile && user.name ? (
-              <>
-                <button
-                  id="btn-quick-start"
-                  onClick={handleQuickStart}
-                  className="w-full py-3.5 px-4 bg-gradient-to-r from-[#E65A00] via-[#FF6A00] to-[#E65A00] hover:from-[#FF7A1A] hover:to-[#E65A00] text-white font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(230,90,0,0.35)] border border-[#FFA559]/40 active:scale-[0.98] transition-all whitespace-nowrap cursor-pointer"
-                  title="Se reconnecter directement avec votre profil conservé"
-                >
-                  <Fingerprint className="w-4 h-4 sm:w-5 sm:h-5 text-orange-200 shrink-0" />
-                  <span>SE RECONNECTER ({user.name.toUpperCase()})</span>
-                </button>
-
-                <div className="flex items-center justify-between px-1 pt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      playSoundEffect('click');
-                      setPlayerName(user.name);
-                      setSelectedAvatar(user.avatar || INITIAL_AVATARS[0].url);
-                      setSelectedAura(user.auraColor || 'orange');
-                      setView('profile_setup');
-                    }}
-                    className="text-[11px] font-black text-emerald-400/80 hover:text-emerald-300 transition-colors uppercase tracking-wider font-mono cursor-pointer"
-                  >
-                    ⚙ Modifier mon profil
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      playSoundEffect('select');
-                      setAuthMethod('guest');
-                      setAuthDestination('');
-                      setPlayerName('');
-                      setSelectedAvatar(INITIAL_AVATARS[0].url);
-                      setSelectedAura('orange');
-                      setNameError(false);
-                      setModerationWarning(null);
-                      setView('profile_setup');
-                    }}
-                    className="text-[11px] font-black text-[#FF7A1A]/85 hover:text-[#FF7A1A] transition-colors uppercase tracking-wider font-mono cursor-pointer"
-                  >
-                    + Nouveau profil à zéro
-                  </button>
-                </div>
-              </>
+              <button
+                id="btn-quick-start"
+                onClick={handleQuickStart}
+                className="w-full py-3.5 px-4 bg-gradient-to-r from-[#E65A00] via-[#FF6A00] to-[#E65A00] hover:from-[#FF7A1A] hover:to-[#E65A00] text-white font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(230,90,0,0.35)] border border-[#FFA559]/40 active:scale-[0.98] transition-all whitespace-nowrap cursor-pointer"
+                title="Se reconnecter directement avec votre profil conservé"
+              >
+                <Fingerprint className="w-4 h-4 sm:w-5 sm:h-5 text-orange-200 shrink-0" />
+                <span>SE RECONNECTER ({user.name.toUpperCase()})</span>
+              </button>
             ) : (
               <button
                 id="btn-quick-start"
@@ -648,25 +614,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose }) 
           >
             RECEVOIR MON CODE PAR EMAIL
           </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              playSoundEffect('select');
-              const cleanEmail = email.trim().toLowerCase();
-              setAuthDestination(cleanEmail || 'joueur@email.com');
-              setAuthMethod('email');
-              setPlayerName(cleanEmail ? cleanEmail.split('@')[0] : '');
-              setSelectedAvatar(INITIAL_AVATARS[0].url);
-              setSelectedAura('orange');
-              setNameError(false);
-              setModerationWarning(null);
-              setView('profile_setup');
-            }}
-            className="w-full py-2.5 mt-2 bg-[#04140D] hover:bg-[#072517] border border-[#16402C] hover:border-[#FF7A1A] text-emerald-300 hover:text-white font-bold text-xs rounded-xl transition-all cursor-pointer font-mono"
-          >
-            Passer à la création de profil & identité →
-          </button>
         </form>
       )}
 
@@ -738,26 +685,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose }) 
             className="w-full py-3 bg-gradient-to-r from-[#10B981] via-[#059669] to-[#10B981] hover:from-[#34D399] hover:to-[#10B981] text-white font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl shadow-[0_4px_20px_rgba(16,185,129,0.35)] border border-[#6EE7B7]/40 active:scale-[0.98] transition-all whitespace-nowrap"
           >
             RECEVOIR LE CODE SMS
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              playSoundEffect('select');
-              const cleanPhone = phone.trim();
-              const fullNumber = cleanPhone ? `${phoneCountry} ${cleanPhone}` : '';
-              setAuthDestination(fullNumber);
-              setAuthMethod('phone');
-              setPlayerName('');
-              setSelectedAvatar(INITIAL_AVATARS[0].url);
-              setSelectedAura('orange');
-              setNameError(false);
-              setModerationWarning(null);
-              setView('profile_setup');
-            }}
-            className="w-full py-2.5 mt-2 bg-[#04140D] hover:bg-[#072517] border border-[#16402C] hover:border-[#10B981] text-emerald-300 hover:text-white font-bold text-xs rounded-xl transition-all cursor-pointer font-mono"
-          >
-            Passer à la création de profil & identité →
           </button>
         </form>
       )}
@@ -932,9 +859,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose }) 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => cameraInputRef.current?.click()}
+                  onClick={() => setIsCameraModalOpen(true)}
                   className="flex items-center gap-1 text-[11px] font-black text-[#10B981] hover:text-emerald-300 transition-colors uppercase tracking-wider font-mono cursor-pointer"
-                  title="Prendre une photo avec l'appareil"
+                  title="Ouvrir la caméra de l'appareil"
                 >
                   <Camera className="w-3.5 h-3.5" />
                   <span>PHOTO</span>
@@ -981,7 +908,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose }) 
                   }}
                   className="w-14 h-14 rounded-xl border-2 p-0.5 overflow-hidden shrink-0 bg-[#072015] flex items-center justify-center"
                 >
-                  {selectedAvatar ? (
+                  {selectedAvatar && selectedAvatar.trim() ? (
                     <img
                       src={selectedAvatar}
                       alt="Aperçu Avatar"
@@ -1099,6 +1026,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({ user, onLogin, onClose }) 
         auraColor={selectedAura}
         onConfirm={handleCropperConfirm}
         onCancel={() => setIsCropperOpen(false)}
+      />
+
+      {/* 8. LIVE DEVICE CAMERA CAPTURE MODAL */}
+      <CameraCaptureModal
+        isOpen={isCameraModalOpen}
+        onClose={() => setIsCameraModalOpen(false)}
+        onCapture={(dataUrl) => {
+          setSelectedAvatar(dataUrl);
+          setImageToCrop(dataUrl);
+          setIsCropperOpen(true);
+        }}
+        title="Appareil photo - Profil"
+        subtitle="Cadre ton visage pour ton avatar"
+        aspectRatio="square"
+        darkMode={darkMode}
       />
     </div>
   );

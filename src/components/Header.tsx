@@ -15,16 +15,20 @@ import {
   BookOpen,
   MoreHorizontal,
   Radio,
+  ArrowRight,
+  X,
 } from 'lucide-react';
 import { GameTab, AppNotification, AppSettings, UserProfile } from '../types';
-import { playSoundEffect, toggleBackgroundMusic } from '../utils/audio';
+import { playSoundEffect, toggleBackgroundMusic, triggerDeviceHaptic } from '../utils/audio';
 import { TRANSLATIONS } from '../data/translations';
+import { AppSettingsModal } from './AppSettingsModal';
 
 interface HeaderProps {
   currentTab: GameTab;
   onSelectTab: (tab: GameTab) => void;
   notifications: AppNotification[];
   onMarkNotificationsRead: () => void;
+  onDeleteNotification?: (id: string) => void;
   settings: AppSettings;
   onUpdateSettings: (settings: Partial<AppSettings>) => void;
   user: UserProfile;
@@ -37,6 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectTab,
   notifications,
   onMarkNotificationsRead,
+  onDeleteNotification,
   settings,
   onUpdateSettings,
   user,
@@ -52,6 +57,37 @@ export const Header: React.FC<HeaderProps> = ({
   const handleTabClick = (tab: GameTab) => {
     playSoundEffect('select');
     onSelectTab(tab);
+  };
+
+  const handleNotificationClick = (notif: AppNotification) => {
+    playSoundEffect('select');
+    triggerDeviceHaptic(20);
+    setShowNotifications(false);
+
+    if (notif.unread) {
+      onMarkNotificationsRead();
+    }
+
+    if (notif.actionType === 'open_settings') {
+      setShowSettings(true);
+    } else if (notif.actionType === 'open_install' && onOpenInstallModal) {
+      onOpenInstallModal();
+    } else if (notif.targetTab) {
+      onSelectTab(notif.targetTab);
+    } else {
+      const text = (notif.title + ' ' + notif.description).toLowerCase();
+      if (text.includes('multi') || text.includes('salon')) {
+        onSelectTab('multi');
+      } else if (text.includes('avatar') || text.includes('profil') || text.includes('aura')) {
+        onSelectTab('avatar');
+      } else if (text.includes('biblio') || text.includes('défi') || text.includes('favori')) {
+        onSelectTab('biblio');
+      } else if (text.includes('store') || text.includes('mise à jour') || text.includes('version')) {
+        setShowSettings(true);
+      } else {
+        onSelectTab('plus');
+      }
+    }
   };
 
   const handleToggleSound = () => {
@@ -134,44 +170,152 @@ export const Header: React.FC<HeaderProps> = ({
 
               {/* Notifications Popover */}
               {showNotifications && (
-                <div
-                  className={`absolute right-0 top-12 w-72 sm:w-80 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl border ${
-                    settings.darkMode
-                      ? 'bg-[#071f14]/98 border-[#1b5337] text-white'
-                      : 'bg-white/98 border-gray-100 text-gray-900 shadow-xl'
-                  }`}
-                >
-                  <div className="bg-gradient-to-r from-[#E65A00] to-[#C84A00] px-4 py-2.5 flex items-center justify-between text-white font-extrabold text-xs tracking-wider">
-                    <span className="flex items-center gap-1.5">
-                      <Bell className="w-3.5 h-3.5" />
-                      {t.notifications}
-                    </span>
-                    <span className="bg-black/25 px-2 py-0.5 rounded-full text-[10px] font-mono">{notifications.length}</span>
-                  </div>
-                  <div className="p-3 space-y-2 max-h-72 overflow-y-auto">
-                    {notifications.map((notif) => (
-                      <div
-                        key={notif.id}
-                        className={`p-2.5 rounded-xl border transition-colors ${
-                          settings.darkMode
-                            ? 'bg-[#05180f] border-[#133c27]'
-                            : 'bg-gray-50 border-gray-100'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 text-xs font-bold text-[#FF7A1A] mb-1">
-                          <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">{notif.title}</span>
-                        </div>
-                        <p className={`text-xs leading-relaxed ${settings.darkMode ? 'text-emerald-100/85' : 'text-gray-600'}`}>
-                          {notif.description}
-                        </p>
-                        <span className={`text-[9px] font-mono block mt-1 ${settings.darkMode ? 'text-emerald-500' : 'text-gray-400'}`}>
-                          {notif.date}
+                <>
+                  {/* Backdrop to dismiss when clicking outside */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowNotifications(false)}
+                    aria-hidden="true"
+                  />
+
+                  <div
+                    className={`absolute right-0 top-12 w-72 sm:w-84 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl border ${
+                      settings.darkMode
+                        ? 'bg-[#071f14]/98 border-[#1b5337] text-white'
+                        : 'bg-white/98 border-gray-100 text-gray-900 shadow-xl'
+                    }`}
+                  >
+                    {/* Header with Title, Count and Close Cross Button */}
+                    <div className="bg-gradient-to-r from-[#E65A00] to-[#C84A00] px-3.5 py-2.5 flex items-center justify-between text-white font-extrabold text-xs tracking-wider">
+                      <span className="flex items-center gap-1.5">
+                        <Bell className="w-3.5 h-3.5" />
+                        {t.notifications}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="bg-black/25 px-2 py-0.5 rounded-full text-[10px] font-mono">
+                          {notifications.length}
                         </span>
+                        {/* Bouton croix pour sortir / fermer */}
+                        <button
+                          type="button"
+                          id="close-notifications-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playSoundEffect('click');
+                            setShowNotifications(false);
+                          }}
+                          className="w-6 h-6 rounded-full bg-black/20 hover:bg-black/40 flex items-center justify-center text-white transition-all cursor-pointer active:scale-90"
+                          aria-label={settings.language === 'FR' ? 'Fermer les notifications' : 'Close notifications'}
+                          title={settings.language === 'FR' ? 'Fermer' : 'Close'}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                    ))}
+                    </div>
+
+                    {/* Notifications List */}
+                    <div className="p-3 space-y-2 max-h-72 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="py-6 text-center text-xs font-medium text-gray-400">
+                          {settings.language === 'FR' ? 'Aucune notification pour le moment.' : 'No notifications at the moment.'}
+                        </div>
+                      ) : (
+                        notifications.map((notif) => (
+                          <div
+                            key={notif.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => handleNotificationClick(notif)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                handleNotificationClick(notif);
+                              }
+                            }}
+                            className={`p-3 rounded-xl border transition-all cursor-pointer group active:scale-[0.98] ${
+                              settings.darkMode
+                                ? 'bg-[#05180f] hover:bg-[#0a2f1e] border-[#133c27] hover:border-[#FF7A1A]/70'
+                                : 'bg-gray-50 hover:bg-orange-50/60 border-gray-200 hover:border-[#FF7A1A]/70 shadow-sm'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1 mb-1">
+                              <div className="flex items-center gap-1.5 text-xs font-black text-[#FF7A1A] truncate">
+                                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate">{notif.title}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {notif.unread && (
+                                  <span className="w-2 h-2 rounded-full bg-[#E65A00] shrink-0 animate-pulse" />
+                                )}
+                                {/* Bouton croix sur la notification individuelle */}
+                                <button
+                                  type="button"
+                                  id={`dismiss-notif-${notif.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    playSoundEffect('click');
+                                    triggerDeviceHaptic(15);
+                                    if (onDeleteNotification) {
+                                      onDeleteNotification(notif.id);
+                                    } else {
+                                      setShowNotifications(false);
+                                    }
+                                  }}
+                                  className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                                  title={settings.language === 'FR' ? 'Supprimer / Fermer' : 'Dismiss / Close'}
+                                  aria-label="Fermer cette notification"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                            <p className={`text-xs leading-relaxed ${settings.darkMode ? 'text-emerald-100/85' : 'text-gray-700'}`}>
+                              {notif.description}
+                            </p>
+                            <div className="flex items-center justify-between mt-2 pt-1 border-t border-black/5 dark:border-white/5">
+                              <span className={`text-[9px] font-mono block ${settings.darkMode ? 'text-emerald-500' : 'text-gray-400'}`}>
+                                {notif.date}
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#FF7A1A] group-hover:translate-x-0.5 transition-transform">
+                                <span>{settings.language === 'FR' ? 'Accéder' : 'Go to'}</span>
+                                <ArrowRight className="w-3 h-3" />
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Popover Footer with Quick Exit Button */}
+                    <div className="px-3 py-2 border-t border-black/5 dark:border-white/5 flex items-center justify-between bg-black/5 dark:bg-white/5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          playSoundEffect('click');
+                          setShowNotifications(false);
+                        }}
+                        className="text-[11px] font-bold text-gray-500 hover:text-gray-800 dark:hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
+                        aria-label="Sortir des notifications"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>{settings.language === 'FR' ? 'Sortir' : 'Close'}</span>
+                      </button>
+                      {unreadCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playSoundEffect('click');
+                            onMarkNotificationsRead();
+                          }}
+                          className="text-[11px] font-bold text-[#FF7A1A] hover:underline cursor-pointer"
+                        >
+                          {settings.language === 'FR' ? 'Tout marquer comme lu' : 'Mark all read'}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
 
@@ -181,10 +325,10 @@ export const Header: React.FC<HeaderProps> = ({
                 id="settings-toggle-btn"
                 onClick={() => {
                   playSoundEffect('click');
-                  setShowSettings(!showSettings);
+                  setShowSettings(true);
                   setShowNotifications(false);
                 }}
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer active:scale-95 ${
                   showSettings
                     ? 'bg-[#E65A00] text-white shadow-[0_0_15px_rgba(230,90,0,0.5)]'
                     : settings.darkMode
@@ -196,121 +340,15 @@ export const Header: React.FC<HeaderProps> = ({
                 <Sliders className="w-4 h-4" />
               </button>
 
-              {/* Settings Popover */}
-              {showSettings && (
-                <div
-                  className={`absolute right-0 top-12 w-64 sm:w-72 rounded-2xl shadow-2xl z-50 p-4 space-y-3.5 animate-in fade-in zoom-in-95 duration-150 text-sm backdrop-blur-xl border ${
-                    settings.darkMode
-                      ? 'bg-[#071f14]/98 border-[#1b5337] text-white'
-                      : 'bg-white/98 border-gray-100 text-gray-900 shadow-xl'
-                  }`}
-                >
-                  <div
-                    className={`text-[11px] font-black tracking-wider pb-2 flex items-center justify-between font-mono border-b ${
-                      settings.darkMode
-                        ? 'text-emerald-300 border-[#143B28]'
-                        : 'text-gray-600 border-gray-100'
-                    }`}
-                  >
-                    <span>{t.systemConfig}</span>
-                    <Radio className="w-3 h-3 text-[#10B981] animate-pulse" />
-                  </div>
-
-                  {/* Light/Dark Toggle */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 font-bold text-xs">
-                      {settings.darkMode ? <Moon className="w-3.5 h-3.5 text-[#E65A00]" /> : <Sun className="w-3.5 h-3.5 text-[#E65A00]" />}
-                      <span>{settings.darkMode ? t.darkMode : t.lightMode}</span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        playSoundEffect('select');
-                        onUpdateSettings({ darkMode: !settings.darkMode });
-                      }}
-                      className={`w-11 h-6 rounded-full p-0.5 flex items-center transition-colors ${
-                        settings.darkMode ? 'bg-[#04140c] border border-[#16472f]' : 'bg-gray-200 border border-gray-300'
-                      }`}
-                    >
-                      <div
-                        className={`w-5 h-5 rounded-full bg-[#E65A00] transition-transform shadow-sm ${
-                          settings.darkMode ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  {/* Sound Toggle */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 font-bold text-xs">
-                      {settings.soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-[#10B981]" /> : <VolumeX className="w-3.5 h-3.5 text-gray-400" />}
-                      <span>{t.cyberAudio}</span>
-                    </div>
-                    <button
-                      onClick={handleToggleSound}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all ${
-                        settings.soundEnabled
-                          ? 'bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/40'
-                          : settings.darkMode
-                          ? 'bg-[#04140c] text-gray-400 border border-transparent'
-                          : 'bg-gray-100 text-gray-500 border border-gray-200'
-                      }`}
-                    >
-                      {settings.soundEnabled ? t.audioEnabled : t.audioMuted}
-                    </button>
-                  </div>
-
-                  {/* Language Switch inside settings */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 font-bold text-xs">
-                      <Globe className="w-3.5 h-3.5 text-[#E65A00]" />
-                      <span>{t.language}</span>
-                    </div>
-                    <div
-                      className={`flex p-0.5 rounded-lg border text-xs font-mono ${
-                        settings.darkMode ? 'bg-[#04140c] border-[#143B28]' : 'bg-gray-100 border-gray-200'
-                      }`}
-                    >
-                      <button
-                        onClick={() => {
-                          playSoundEffect('select');
-                          onUpdateSettings({ language: 'FR' });
-                        }}
-                        className={`px-2 py-0.5 rounded-md font-bold transition-all ${
-                          settings.language === 'FR' ? 'bg-[#E65A00] text-white shadow-sm' : settings.darkMode ? 'text-emerald-400/60' : 'text-gray-500'
-                        }`}
-                      >
-                        FR
-                      </button>
-                      <button
-                        onClick={() => {
-                          playSoundEffect('select');
-                          onUpdateSettings({ language: 'EN' });
-                        }}
-                        className={`px-2 py-0.5 rounded-md font-bold transition-all ${
-                          settings.language === 'EN' ? 'bg-[#E65A00] text-white shadow-sm' : settings.darkMode ? 'text-emerald-400/60' : 'text-gray-500'
-                        }`}
-                      >
-                        EN
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Logout button */}
-                  <div className={`pt-2 border-t ${settings.darkMode ? 'border-[#143B28]' : 'border-gray-100'}`}>
-                    <button
-                      onClick={() => {
-                        playSoundEffect('click');
-                        setShowSettings(false);
-                        onLogout();
-                      }}
-                      className="w-full flex items-center justify-center gap-2 py-2 text-xs font-extrabold text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span>{t.logout}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
+              {/* Full Settings Modal (Exact layout matching mockup) */}
+              <AppSettingsModal
+                isOpen={showSettings}
+                onClose={() => setShowSettings(false)}
+                settings={settings}
+                onUpdateSettings={onUpdateSettings}
+                onLogout={onLogout}
+                user={user}
+              />
             </div>
           </div>
         </div>

@@ -23,6 +23,7 @@ import {
   UserPlus,
   LogOut,
   Trophy,
+  User,
 } from 'lucide-react';
 import { UserProfile, RoomPlayer, ChatMessage, ChallengeType, Intensity, Challenge } from '../types';
 import { playSoundEffect } from '../utils/audio';
@@ -791,13 +792,17 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
         }`}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-full border-2 border-[#E65A00] p-0.5 shadow-md shadow-[#E65A00]/25 bg-[#04140D] overflow-hidden shrink-0">
-            <img
-              src={user.avatar}
-              alt="Avatar"
-              className="w-full h-full object-cover rounded-full"
-              referrerPolicy="no-referrer"
-            />
+          <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-full border-2 border-[#E65A00] p-0.5 shadow-md shadow-[#E65A00]/25 bg-[#04140D] overflow-hidden shrink-0 flex items-center justify-center">
+            {user.avatar && user.avatar.trim() ? (
+              <img
+                src={user.avatar}
+                alt="Avatar"
+                className="w-full h-full object-cover rounded-full"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <User className="w-6 h-6 text-emerald-400 opacity-60" />
+            )}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-[10px] font-black text-[#FF7A1A] uppercase tracking-wider font-mono">
@@ -1061,7 +1066,13 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
                       {pendingRequests.map((req) => (
                         <div key={req.id} className="flex items-center justify-between p-2 bg-[#082216] rounded-xl border border-[#143E29]">
                           <div className="flex items-center gap-2">
-                            <img src={req.avatar} alt={req.name} className="w-8 h-8 rounded-full object-cover" />
+                            {req.avatar && req.avatar.trim() ? (
+                              <img src={req.avatar} alt={req.name} className="w-8 h-8 rounded-full object-cover" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-[#133A27] flex items-center justify-center text-white text-xs font-black">
+                                {req.name.charAt(0)}
+                              </div>
+                            )}
                             <div>
                               <span className="text-xs font-black text-white block">{req.name}</span>
                               <span className="text-[10px] text-emerald-400/70 font-mono">{req.timestamp}</span>
@@ -1135,11 +1146,17 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
                       </span>
                     </div>
                     <div className="flex items-center justify-center gap-2.5">
-                      <img
-                        src={(players.find((p) => p.isTurn) || players[0]).avatar}
-                        alt="Active Player"
-                        className="w-9 h-9 rounded-full border-2 border-[#FF7A1A] object-cover shadow"
-                      />
+                      {(players.find((p) => p.isTurn) || players[0])?.avatar?.trim() ? (
+                        <img
+                          src={(players.find((p) => p.isTurn) || players[0]).avatar}
+                          alt="Active Player"
+                          className="w-9 h-9 rounded-full border-2 border-[#FF7A1A] object-cover shadow"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full border-2 border-[#FF7A1A] bg-[#0B2D1D] flex items-center justify-center text-white text-sm font-black">
+                          {((players.find((p) => p.isTurn) || players[0])?.name || 'P').charAt(0)}
+                        </div>
+                      )}
                       <h2 className="text-lg sm:text-xl font-black text-white font-display">
                         {(players.find((p) => p.isTurn) || players[0]).name}
                       </h2>
@@ -1519,8 +1536,14 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-[#FF7A1A] overflow-hidden bg-[#04140D] shrink-0">
-                          <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-[#FF7A1A] overflow-hidden bg-[#04140D] shrink-0 flex items-center justify-center">
+                          {p.avatar && p.avatar.trim() ? (
+                            <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-[#133A27] text-white text-xs font-bold">
+                              {p.name.charAt(0)}
+                            </div>
+                          )}
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1">
@@ -1620,7 +1643,13 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
                           onClick={() => handleSelectMention(p.name)}
                           className="w-full px-2 py-1.5 rounded-lg flex items-center gap-2 hover:bg-[#0c2f1f] text-left transition-colors"
                         >
-                          <img src={p.avatar} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-[#FF7A1A]" />
+                          {p.avatar && p.avatar.trim() ? (
+                            <img src={p.avatar} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-[#FF7A1A]" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-[#133A27] flex items-center justify-center text-white text-[9px] font-bold border border-[#FF7A1A]">
+                              {p.name.charAt(0)}
+                            </div>
+                          )}
                           <span className="text-xs font-bold text-white truncate">@{p.name}</span>
                           <span className="text-[10px] text-emerald-400 font-mono ml-auto">{p.score} pts</span>
                         </button>

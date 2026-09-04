@@ -13,6 +13,7 @@ import {
   ChevronUp,
   UserCheck,
   ShieldCheck,
+  Sliders,
 } from 'lucide-react';
 import { playSoundEffect } from '../utils/audio';
 import { TRANSLATIONS } from '../data/translations';
@@ -28,9 +29,10 @@ interface ReviewItem {
 interface PlusViewProps {
   lang?: 'FR' | 'EN';
   darkMode?: boolean;
+  onOpenSettings?: () => void;
 }
 
-export const PlusView: React.FC<PlusViewProps> = ({ lang = 'FR', darkMode = true }) => {
+export const PlusView: React.FC<PlusViewProps> = ({ lang = 'FR', darkMode = true, onOpenSettings }) => {
   const t = TRANSLATIONS[lang];
 
   const [rating, setRating] = useState(5);
@@ -159,6 +161,45 @@ export const PlusView: React.FC<PlusViewProps> = ({ lang = 'FR', darkMode = true
 
   return (
     <div className="w-full max-w-xl mx-auto flex flex-col items-center select-none pb-8 space-y-3 sm:space-y-4" id="plus-screen">
+      {/* Settings & System Preferences Card */}
+      {onOpenSettings && (
+        <div
+          className={`w-full rounded-2xl sm:rounded-3xl p-4 sm:p-5 transition-all border flex items-center justify-between gap-3 ${
+            darkMode
+              ? 'bg-[#061D12] border-[#133F28] shadow-xl'
+              : 'bg-white border-gray-100 shadow-[0_8px_25px_rgba(0,0,0,0.06)]'
+          }`}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                darkMode ? 'bg-[#04140D] text-[#E65A00] border border-[#16402C]' : 'bg-[#FFF3EB] text-[#E65A00] border border-[#FFE0CC]'
+              }`}
+            >
+              <Sliders className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className={`font-black text-sm sm:text-base font-display truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                {lang === 'FR' ? 'Paramètres & Audio' : 'Settings & Audio'}
+              </h2>
+              <p className={`text-[11px] truncate ${darkMode ? 'text-emerald-300/70' : 'text-gray-500'}`}>
+                {lang === 'FR' ? 'Mode sombre, voix, vibrations, musique pop & store' : 'Dark mode, voice, haptics, pop music & store'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              playSoundEffect('click');
+              onOpenSettings();
+            }}
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#FF7A1A] to-[#E65A00] hover:from-[#FF8C33] hover:to-[#FF6A00] text-white text-xs font-black shrink-0 shadow-md shadow-[#E65A00]/25 active:scale-95 transition-all cursor-pointer whitespace-nowrap font-display"
+          >
+            {lang === 'FR' ? 'Ouvrir' : 'Open'}
+          </button>
+        </div>
+      )}
+
       {/* Card 1: Partager l'aventure (Section 8.1) */}
       <div
         className={`w-full rounded-2xl sm:rounded-3xl p-4 sm:p-6 space-y-3.5 transition-all border ${

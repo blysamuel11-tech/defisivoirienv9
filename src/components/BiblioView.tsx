@@ -480,16 +480,20 @@ export const BiblioView: React.FC<BiblioViewProps> = ({
             <div className={`flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4 pb-4 border-b ${darkMode ? 'border-[#143B28]' : 'border-gray-100'}`}>
               <div className="flex flex-col sm:flex-row items-center gap-3.5 text-center sm:text-left">
                 <div
-                  className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-[#FF7A1A] p-0.5 shadow-lg shadow-[#FF7A1A]/20 overflow-hidden shrink-0 ${
+                  className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-[#FF7A1A] p-0.5 shadow-lg shadow-[#FF7A1A]/20 overflow-hidden shrink-0 flex items-center justify-center ${
                     darkMode ? 'bg-[#04140D]' : 'bg-orange-50'
                   }`}
                 >
-                  <img
-                    src={user.avatar}
-                    alt={user.name}
-                    className="w-full h-full object-cover rounded-full"
-                    referrerPolicy="no-referrer"
-                  />
+                  {user.avatar && user.avatar.trim() ? (
+                    <img
+                      src={user.avatar}
+                      alt={user.name}
+                      className="w-full h-full object-cover rounded-full"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <User className="w-8 h-8 text-emerald-400 opacity-60" />
+                  )}
                   {isInRoomGame ? (
                     <div className="absolute bottom-0 inset-x-0 bg-black/80 py-0.5 text-center text-[8px] font-black text-amber-400 uppercase font-mono">
                       #{userRoomRankNumber} SALON
@@ -743,13 +747,19 @@ export const BiblioView: React.FC<BiblioViewProps> = ({
                         </div>
 
                         {/* Avatar */}
-                        <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-[#FF7A1A]/60 overflow-hidden shrink-0">
-                          <img
-                            src={item.avatar}
-                            alt={item.name}
-                            className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
-                          />
+                        <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-[#FF7A1A]/60 overflow-hidden shrink-0 flex items-center justify-center bg-[#04140D]">
+                          {item.avatar && item.avatar.trim() ? (
+                            <img
+                              src={item.avatar}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-[#133A27] flex items-center justify-center text-white text-xs font-bold">
+                              {item.name.charAt(0)}
+                            </div>
+                          )}
                         </div>
 
                         {/* Pseudo et statut du salon */}

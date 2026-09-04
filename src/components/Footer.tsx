@@ -33,7 +33,7 @@ export const Footer: React.FC<FooterProps> = ({ darkMode = true }) => {
           darkMode ? 'text-emerald-400/60' : 'text-gray-400'
         }`}
       >
-        © 2026 GBÊ OU MOUMENT • CRÉÉ PAR SAMUEL EZECKIEL BLY (2.2.0)
+        © 2026 GBÊ OU MOUMENT • CRÉÉ PAR SAMUEL EZECKIEL BLY
       </p>
     </footer>
   );

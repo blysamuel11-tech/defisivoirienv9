@@ -39,6 +39,26 @@
         } catch (e) {
           // Ignore
         }
+
+        // Filter benign Vite websocket disconnection warnings in preview sandbox where HMR is disabled
+        try {
+          var origErr = console.error;
+          console.error = function() {
+            if (arguments.length > 0 && typeof arguments[0] === 'string' && arguments[0].indexOf('[vite]') !== -1) {
+              return;
+            }
+            return origErr.apply(console, arguments);
+          };
+          var origWarn = console.warn;
+          console.warn = function() {
+            if (arguments.length > 0 && typeof arguments[0] === 'string' && arguments[0].indexOf('[vite]') !== -1) {
+              return;
+            }
+            return origWarn.apply(console, arguments);
+          };
+        } catch (e) {
+          // Ignore
+        }
       })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
