@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#04120B"/>
+      <stop offset="50%" stop-color="#072A19"/>
+      <stop offset="100%" stop-color="#020B06"/>
+    </linearGradient>
+    <linearGradient id="flameOrange" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#D9480F"/>
+      <stop offset="50%" stop-color="#FF6A00"/>
+      <stop offset="100%" stop-color="#FFA94D"/>
+    </linearGradient>
+    <linearGradient id="electricGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  
+  <!-- Outer Cyber Ring -->
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#16462E" stroke-width="6" stroke-dasharray="16 8"/>
+  <circle cx="256" cy="256" r="170" fill="#061F13" stroke="url(#flameOrange)" stroke-width="5" filter="url(#glow)"/>
+
+  <!-- Stylized African Mask & Lightning / Flame Silhouette -->
+  <!-- Truth Flame (Left / Center) -->
+  <path d="M256 120 C230 180 200 210 200 250 C200 290 225 320 256 340 C240 300 245 260 265 240 C280 225 285 200 270 170 C285 190 295 220 290 250 C310 230 315 200 300 170 C330 210 330 270 300 310 C320 290 325 260 320 240 C315 310 270 350 256 360 C242 350 190 310 190 250 C190 195 230 150 256 120 Z" fill="url(#flameOrange)" filter="url(#glow)"/>
+
+  <!-- Energy Lightning (Right) -->
+  <polygon points="260,160 220,260 255,260 245,340 300,240 265,240" fill="#FFF" opacity="0.95" />
+
+  <!-- Badge Text Accent -->
+  <text x="256" y="420" text-anchor="middle" font-family="'Righteous', system-ui, sans-serif" font-weight="900" font-size="34" fill="#FFA94D" letter-spacing="4">GBÊ OU MOUMENT</text>
+  <text x="256" y="445" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="14" fill="#10B981" letter-spacing="6">EDITION MOBILE</text>
+</svg>

@@ -1,3 +1,6 @@
+import { Capacitor } from '@capacitor/core';
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+
 /**
  * Web Audio API synthesizer for interactive party sounds & ambient vibes
  * Works seamlessly in all modern browsers without external audio assets.
@@ -206,19 +209,33 @@ export function playSoundEffect(type: 'click' | 'select' | 'success' | 'fail' | 
   if (isAppInBackground) return;
   try {
     // Haptic vibration feedback synchronized with sounds on mobile devices
-    if (isVibrationsEnabled && typeof navigator !== 'undefined' && navigator.vibrate) {
-      if (type === 'approval') {
-        navigator.vibrate([50, 40, 60]);
-      } else if (type === 'success') {
-        navigator.vibrate([40, 50, 40]);
-      } else if (type === 'fail') {
-        navigator.vibrate([60, 40]);
-      } else if (type === 'notification' || type === 'chat') {
-        navigator.vibrate(35);
-      } else if (type === 'click' || type === 'select') {
-        navigator.vibrate(12);
-      } else if (type === 'typing') {
-        navigator.vibrate(5);
+    if (isVibrationsEnabled) {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          if (type === 'approval' || type === 'success') {
+            Haptics.notification({ type: NotificationType.Success }).catch(() => {});
+          } else if (type === 'fail') {
+            Haptics.notification({ type: NotificationType.Warning }).catch(() => {});
+          } else if (type === 'notification' || type === 'chat') {
+            Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {});
+          } else {
+            Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+          }
+        } catch {}
+      } else if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        if (type === 'approval') {
+          navigator.vibrate([50, 40, 60]);
+        } else if (type === 'success') {
+          navigator.vibrate([40, 50, 40]);
+        } else if (type === 'fail') {
+          navigator.vibrate([60, 40]);
+        } else if (type === 'notification' || type === 'chat') {
+          navigator.vibrate(35);
+        } else if (type === 'click' || type === 'select') {
+          navigator.vibrate(12);
+        } else if (type === 'typing') {
+          navigator.vibrate(5);
+        }
       }
     }
 

@@ -15,6 +15,7 @@ import { Footer } from './components/Footer';
 import { MobileInstallModal } from './components/MobileInstallModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { AppSettingsModal } from './components/AppSettingsModal';
+import { initNativeMobileFeatures } from './utils/nativeMobile';
 
 export default function App() {
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
@@ -130,6 +131,27 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('gbe_current_tab', currentTab);
   }, [currentTab]);
+
+  // Native mobile initialization (Status bar, splash screen, hardware back button)
+  useEffect(() => {
+    initNativeMobileFeatures({
+      onBackButton: () => {
+        if (isSettingsModalOpen) {
+          setIsSettingsModalOpen(false);
+          return true;
+        }
+        if (isInstallModalOpen) {
+          setIsInstallModalOpen(false);
+          return true;
+        }
+        if (currentTab !== 'solo') {
+          setCurrentTab('solo');
+          return true;
+        }
+        return false;
+      },
+    });
+  }, [isSettingsModalOpen, isInstallModalOpen, currentTab]);
 
   const handleUpdateScore = (points: number) => {
     setUser((prev) => {

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Gbê ou Moument</string>
+    <string name="title_activity_main">Gbê ou Moument</string>
+    <string name="package_name">com.gbeoumoument.app</string>
+    <string name="custom_url_scheme">com.gbeoumoument.app</string>
+</resources>
