@@ -23,6 +23,10 @@ empaqueté en **vraies applications natives Android et iOS** grâce à **Capacit
 - **Solo** : défis Vérité / Action générés pour jouer seul ou se tester.
 - **Multi** : jeu de soirée à plusieurs joueurs (tour par tour, ambiance afro/urbaine).
 - **Avatars** : création / personnalisation d'avatars (photo caméra ou galerie).
+- **Preuve visuelle de défi** *(salon)* : en mode Action (Moument) et Vérité, le joueur peut
+  joindre une **photo ou une vidéo** (appareil photo ou galerie) comme preuve de son action
+  / réponse, visible par tous les participants avant le vote. **Obligatoire pour valider une
+  Action.**
 - **Création IA** *(optionnel)* : génération de défis sur-mesure via l'API **Google Gemini**.
 - **Bibliothèque** : conservation et réutilisation de vos défis préférés.
 - **Natif** : vibration (haptique), splash screen de marque, bouton retour Android,
@@ -33,8 +37,8 @@ empaqueté en **vraies applications natives Android et iOS** grâce à **Capacit
 ## 🛠️ Pile technique
 
 - **Web** : React 19, TypeScript, Vite 6, Tailwind CSS 4, Motion (animation), lucide-react.
-- **Natif** : Capacitor 8 (Android + iOS) avec plugins `app`, `haptics`, `keyboard`,
-  `splash-screen`, `status-bar`.
+- **Natif** : Capacitor 8 (Android + iOS) avec plugins `app`, `camera`, `haptics`,
+  `keyboard`, `splash-screen`, `status-bar`.
 - **Serveur (optionnel)** : Express + Google Gemini (`@google/genai`), en fallback local
   (fonctionne hors-ligne sans clé).
 
@@ -96,6 +100,49 @@ disponible.
   si une `GEMINI_API_KEY` est configurée.
 - Un bandeau discret « *Hors ligne — le jeu fonctionne sans connexion* » s'affiche quand le
   réseau est coupé, pour rassurer les joueurs.
+
+---
+
+## 📸 Preuve visuelle — Caméra & Galerie (mode salon)
+
+Dans un **salon multijoueur**, lors d'un défi **Action (Moument)** ou **Vérité (Gbê)**, le
+joueur peut joindre une **preuve visuelle** (photo ou vidéo) en plus du texte de validation.
+Cette preuve est affichée à **tous les participants** dans l'écran d'évaluation/vote, pour
+qu'ils jugent l'exécution du défi.
+
+### Règles
+- **Action (Moument)** : la preuve visuelle est **obligatoire** pour valider (le bouton
+  « Soumettre aux votes » reste désactivé — « Preuve requise » — tant qu'aucune photo/vidéo
+  n'est jointe).
+- **Vérité (Gbê)** : la preuve visuelle est **facultative** (elle renforce la réponse).
+
+### Options disponibles (écran « VALIDATION DU DÉFI »)
+| Bouton | Actions |
+|---|---|
+| 📷 **CAMÉRA** | « Prendre une photo » (appareil photo natif) · « Enregistrer une vidéo » |
+| 🖼️ **GALERIE** | « Choisir une image » · « Choisir une vidéo » |
+
+- Sur l'**app native** (APK/iOS), « Prendre une photo » et « Choisir une image » utilisent le
+  plugin **`@capacitor/camera`** pour ouvrir le vrai appareil photo / la photothèque.
+- En **navigateur / aperçu web**, ces actions utilisent l'API web (modale caméra `getUserMedia`
+  + sélecteur de fichiers) en repli.
+- La preuve est **réinitialisée à chaque tour** et **persistée** avec la session du salon.
+- Limite de taille vidéo : **35 Mo** ; les images sont compressées côté client.
+
+### Permissions natives requises
+Elles sont déjà déclarées dans le projet (voir « 🔁 Notes de synchronisation » pour appliquer
+après modifications) :
+
+- **Android** — `android/app/src/main/AndroidManifest.xml` :
+  - `android.permission.CAMERA` (+ `<uses-feature android.hardware.camera>` non requis).
+- **iOS** — `ios/App/App/Info.plist` (descriptions demandées à l'utilisateur) :
+  - `NSCameraUsageDescription` (appareil photo),
+  - `NSPhotoLibraryUsageDescription` (galerie photo/vidéo),
+  - `NSMicrophoneUsageDescription` (micro, pour les vidéos).
+
+> ℹ️ Au **premier lancement** de l'app native, le système demandera l'accès à la caméra /
+> à la galerie : acceptez pour pouvoir envoyer vos preuves. L'enregistrement vidéo via la
+> caméra nécessite l'autorisation du microphone.
 
 ---
 
