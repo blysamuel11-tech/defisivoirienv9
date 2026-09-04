@@ -168,6 +168,13 @@ npx cap sync ios              # synchronise dist/ vers le projet Xcode
 npx cap open ios              # ouvre ios/App/App.xcodeproj dans Xcode
 ```
 
+…ou, en une seule commande (sur un Mac équipé de Xcode) :
+
+```bash
+./build-ios.sh            # prépare et ouvre le projet dans Xcode
+./build-ios.sh --no-open  # prépare seulement, sans ouvrir Xcode
+```
+
 Dans Xcode :
 1. Sélectionner le **team** de signature (onglet *Signing & Capabilities*).
 2. Sélectionner un simulateur ou un iPhone branché.
