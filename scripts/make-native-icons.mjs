@@ -1,11 +1,18 @@
 // Generates native launcher icons + splash screens for Android & iOS
-// from the master 1024px brand icon (brand/app-icon-1024.png).
+// from a master brand icon.
+//
+// Usage:
+//   node scripts/make-native-icons.mjs [chemin/icone.png]
+//   ou  ICON_SOURCE=chemin/icone.png node scripts/make-native-icons.mjs
+//
+// Sans argument, utilise brand/app-icon-1024.png par défaut.
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
 
 const root = process.cwd();
-const master = path.join(root, 'brand', 'app-icon-1024.png');
+const cliArg = process.argv[2];
+const master = cliArg || process.env.ICON_SOURCE || path.join(root, 'brand', 'app-icon-1024.png');
 
 const MIPMAP = (d) => path.join(root, 'android', 'app', 'src', 'main', 'res', `mipmap-${d}`);
 const iosAppIcon = path.join(root, 'ios', 'App', 'App', 'Assets.xcassets', 'AppIcon.appiconset');

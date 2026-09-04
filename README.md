@@ -54,9 +54,11 @@ public/                  Icons PWA, manifest, manifest.webmanifest
 server.ts                Serveur Express + route IA Gemini (optionnel)
 capacitor.config.ts      Configuration Capacitor (appId, plugins…)
 scripts/
-  make-native-icons.mjs  Re-génère icônes & splash natives depuis brand/app-icon-1024.png
-  build-android.sh       Compile l'APK Android (pré-requis : JDK17 + SDK)
-brand/app-icon-1024.png  Icône maîtresse (source des icônes natives)
+  make-native-icons.mjs   Re-génère icônes & splash natives (source par défaut : brand/app-icon-1024.png)
+  build-android.sh        Compile l'APK Android (pré-requis : JDK17 + SDK)
+  create-android-keystore.sh  Génère un keystore de signature release + keystore.properties
+brand/app-icon-1024.png   Icône maîtresse (source des icônes natives)
+android/keystore.properties.example   Modèle de config de signature (secret non versionné)
 ```
 
 ---
@@ -81,6 +83,22 @@ npm run dev
 
 ---
 
+## 📶 Mode hors-ligne
+
+L'application est **entièrement autonome** : les modes **Solo**, **Multi**, **Avatars** et
+**Bibliothèque** fonctionnent **sans aucune connexion réseau**. Toute la logique de jeu et
+les données persistent en local (`localStorage` / stockage du WebView natif), et la
+« Création IA » utilise des défis de secours intégrés quand aucun serveur/clé n'est
+disponible.
+
+- Aucun appel réseau n'est requis par l'interface (vérifié : aucun `fetch` dans le code UI).
+- Le serveur Express + Gemini est **optionnel** : il ne sert qu'à enrichir la génération IA
+  si une `GEMINI_API_KEY` est configurée.
+- Un bandeau discret « *Hors ligne — le jeu fonctionne sans connexion* » s'affiche quand le
+  réseau est coupé, pour rassurer les joueurs.
+
+---
+
 ## 📱 Construire l'application Android (APK)
 
 ### Pré-requis
@@ -94,17 +112,40 @@ npm run dev
 npm install
 npm run build                 # construit le web dans dist/
 npx cap sync android          # synchronise dist/ vers le projet natif
-bash scripts/build-android.sh # génère app-debug.apk (+ app-release-unsigned.apk)
+bash scripts/build-android.sh # génère app-debug.apk (+ app-release-*.apk)
 ```
 
 Les APK sont produits dans `android/app/build/outputs/apk/`.
+
+### Générer un APK release **signé** (installable partout)
+
+La signature release est configurée dans Gradle mais activée **uniquement** si
+`android/keystore.properties` existe (jamais commité). Pour créer un keystore de
+développement et la config associée :
+
+```bash
+bash scripts/create-android-keystore.sh \
+  --alias gbe-moument \
+  --storepass "VotreMotDePasseLong" \
+  --keypass "VotreMotDePasseClef"
+```
+
+Puis recompiler :
+
+```bash
+bash scripts/build-android.sh
+# → android/app/build/outputs/apk/release/app-release.apk  (signé)
+```
+
+Pour la mise en **production** (Play Store) : conservez précieusement le keystore et ses
+mots de passe (sans eux, impossible de mettre à jour l'app publiée), et générez plutôt un
+`.aab` signé via Android Studio (`Build → Generate Signed App Bundle`).
 
 ### Étapes (via Android Studio)
 1. `npm run build && npx cap sync android`
 2. Ouvrir le dossier `android/` dans **Android Studio**.
 3. Menu **Build → Generate Signed App Bundle / APK** (ou `Build > Build Bundle(s)/APK(s) > Build APK`).
-4. Pour une mise en production (Play Store) : créer un **keystore** et suivre l'assistant
-   de signature (cela génère un `.aab`/`.apk` signé).
+4. Créer ou sélectionner un **keystore** et suivre l'assistant de signature (`.aab`/`.apk` signé).
 
 ---
 
@@ -133,6 +174,7 @@ Dans Xcode :
 
 ## 🎨 Icônes & écran d'accueil (splash) de marque
 
+### Icône par défaut
 L'icône maîtresse se trouve dans `brand/app-icon-1024.png`. Pour régénérer toutes les
 icônes natives (Android mipmaps + adaptive icon, iOS AppIcon) et les fonds de splash de
 marque **éméraude** `#05130D` :
@@ -141,6 +183,28 @@ marque **éméraude** `#05130D` :
 npm i -D sharp                 # outil de traitement d'image (une fois)
 node scripts/make-native-icons.mjs
 ```
+
+### Utiliser **votre propre icône** (personnalisation)
+
+1. Préparez votre visuel au format **carré 1024×1024 PNG** (idéalement sans arrière-plan
+   détouré si vous fournissez un logo rond, sinon l'image complète est utilisée comme
+   icône et découpée en cercle pour les variantes rondes / adaptatives).
+2. Régénérez toutes les icônes natives en passant le chemin en argument (ou via la
+   variable `ICON_SOURCE`) :
+
+```bash
+node scripts/make-native-icons.mjs chemin/vers/mon-icone.png
+# ou
+ICON_SOURCE=chemin/vers/mon-icone.png node scripts/make-native-icons.mjs
+```
+
+3. Si l'icône change aussi l'apparence PWA/web, remplacez `public/` et relancez :
+   `npm run build && npx cap sync`.
+
+> Astuce : pour un résultat propre sur Android, fournissez un **logo centré** occupant
+> ~60 % du canvas (la zone de sécurité des icônes adaptatives), le reste étant
+> transparent ou uni. Vous pouvez aussi directement remplacer
+> `brand/app-icon-1024.png` puis relancer la génération.
 
 ---
 

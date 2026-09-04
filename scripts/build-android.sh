@@ -21,6 +21,14 @@ echo "➡️  Construction de l'APK Android (Gradle)…"
 ./gradlew assembleDebug assembleRelease --no-daemon
 
 echo ""
-echo "✅ Terminé ! APK disponibles :"
-echo "   - android/app/build/outputs/apk/debug/app-debug.apk"
-echo "   - android/app/build/outputs/apk/release/app-release-unsigned.apk"
+if [[ -f keystore.properties ]]; then
+  echo "✅ Terminé ! APK signés disponibles :"
+  echo "   - android/app/build/outputs/apk/release/app-release.apk  (signé)"
+else
+  echo "✅ Terminé ! APK disponibles :"
+  echo "   - android/app/build/outputs/apk/debug/app-debug.apk"
+  echo "   - android/app/build/outputs/apk/release/app-release-unsigned.apk"
+  echo ""
+  echo "ℹ️  Pas de signature release détectée. Pour un APK release signé :"
+  echo "   bash scripts/create-android-keystore.sh  puis relancez ce script."
+fi

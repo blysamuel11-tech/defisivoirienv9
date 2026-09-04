@@ -16,10 +16,31 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing config. Activated only when android/keystore.properties
+    // exists (see android/keystore.properties.example). This lets a signed,
+    // installable APK be produced without committing any secret to git.
+    signingConfigs {
+        release {
+            def ksFile = rootProject.file('keystore.properties')
+            if (ksFile.exists()) {
+                def props = new Properties()
+                props.load(new FileInputStream(ksFile))
+                storeFile file(props['storeFile'])
+                storePassword props['storePassword']
+                keyAlias props['keyAlias']
+                keyPassword props['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            def ksFile = rootProject.file('keystore.properties')
+            if (ksFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
