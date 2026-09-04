@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Copy,
   Check,
@@ -24,17 +24,33 @@ import {
   LogOut,
   Trophy,
   User,
+  Camera,
+  Video,
+  Image as ImageIcon,
+  X,
 } from 'lucide-react';
 import { UserProfile, RoomPlayer, ChatMessage, ChallengeType, Intensity, Challenge } from '../types';
 import { playSoundEffect } from '../utils/audio';
 import { TRANSLATIONS } from '../data/translations';
 import { validateContentModeration } from '../utils/moderation';
+import { CameraCaptureModal } from './CameraCaptureModal';
+import { compressAndResizeImage } from '../utils/imageCompressor';
+// Native camera / gallery (photo) via Capacitor on device; web keeps browser UI
+import { Capacitor } from '@capacitor/core';
+import { Camera as CapCamera, CameraSource, CameraResultType } from '@capacitor/camera';
 
 interface PendingRequest {
   id: string;
   name: string;
   avatar: string;
   timestamp: string;
+}
+
+// Media proof (image or video) attached by a player to justify a performed dare.
+interface ProofMedia {
+  kind: 'image' | 'video';
+  url: string;
+  name?: string;
 }
 
 interface MultiViewProps {
@@ -120,6 +136,15 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
   const [chatWarning, setChatWarning] = useState<string | null>(null);
   const [answerWarning, setAnswerWarning] = useState<string | null>(null);
 
+  // Visual proof (photo / video) attached by the player to justify an action (Moument)
+  const [proofMedia, setProofMedia] = useState<ProofMedia | null>(savedSession?.proofMedia || null);
+  const [proofMenu, setProofMenu] = useState<'cam' | 'gal' | null>(null);
+  const [proofWarning, setProofWarning] = useState<string | null>(null);
+  const [isProofCameraOpen, setIsProofCameraOpen] = useState(false);
+  const camVideoRef = useRef<HTMLInputElement>(null);   // record a video with the device camera
+  const galImageRef = useRef<HTMLInputElement>(null);   // pick an image from the gallery
+  const galVideoRef = useRef<HTMLInputElement>(null);   // pick a video from the gallery
+
   // Access requests for host approval
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>(savedSession?.pendingRequests || []);
 
@@ -198,6 +223,7 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
         currentPrompt,
         playerAnswer,
         pendingRequests,
+        proofMedia,
       };
       try {
         localStorage.setItem('gbe_multi_room_session', JSON.stringify(sessionData));
@@ -206,7 +232,7 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
         console.debug('LocalStorage write failed', e);
       }
     }
-  }, [roomCode, multiStep, turnPhase, players, chatMessages, activeType, activeIntensity, currentPrompt, playerAnswer, pendingRequests]);
+  }, [roomCode, multiStep, turnPhase, players, chatMessages, activeType, activeIntensity, currentPrompt, playerAnswer, pendingRequests, proofMedia]);
 
   // Handle visibility & unload to guarantee room code and state remain strictly identical on tab/app return (Section 10.5)
   useEffect(() => {
@@ -224,6 +250,7 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
             currentPrompt,
             playerAnswer,
             pendingRequests,
+            proofMedia,
           };
           try {
             localStorage.setItem('gbe_multi_room_session', JSON.stringify(sessionData));
@@ -255,7 +282,7 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
       window.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('pagehide', handleVisibility);
     };
-  }, [roomCode, multiStep, turnPhase, players, chatMessages, activeType, activeIntensity, currentPrompt, playerAnswer, pendingRequests]);
+  }, [roomCode, multiStep, turnPhase, players, chatMessages, activeType, activeIntensity, currentPrompt, playerAnswer, pendingRequests, proofMedia]);
 
   const generateRandomCode = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -461,6 +488,7 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
     setTieNotice(false);
     setUserVoted(null);
     setPendingRequests([]);
+    resetProof();
     setPlayers([
       {
         id: 'p-host',
@@ -563,6 +591,7 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
     setTurnPhase('choose');
     setPlayerAnswer('');
     setTieNotice(false);
+    resetProof();
   };
 
   const handleConfirmTurnChoice = () => {
@@ -572,6 +601,7 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
     setTurnPhase('play');
     setPlayerAnswer('');
     setTieNotice(false);
+    resetProof();
 
     const activePlayer = players.find((p) => p.isTurn) || players[0];
     const typeLabel =
@@ -601,11 +631,13 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
     playSoundEffect('select');
     const nextDrawn = getRandomMultiChallenge(activeType, activeIntensity, currentPrompt);
     setCurrentPrompt(nextDrawn);
+    resetProof();
   };
 
   const handleChangeChoice = () => {
     playSoundEffect('select');
     setTurnPhase('choose');
+    resetProof();
   };
 
   const getPointsForTurn = (type: ChallengeType, inten: Intensity) => {
@@ -613,8 +645,125 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
     return inten === 'osée' ? 50 : 20;
   };
 
+  // Clear any attached proof (used when a challenge / turn changes)
+  const resetProof = () => {
+    setProofMedia(null);
+    setProofMenu(null);
+    setProofWarning(null);
+    setIsProofCameraOpen(false);
+  };
+
+  // Generic File → data URL reader (used for video/gallery proofs)
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  // Camera: photo captured via the live camera modal (web)
+  const handleProofCameraPhoto = (dataUrl: string) => {
+    setProofMedia({ kind: 'image', url: dataUrl });
+    setIsProofCameraOpen(false);
+    setProofMenu(null);
+    setProofWarning(null);
+    playSoundEffect('success');
+  };
+
+  // Native photo capture (camera or gallery) via @capacitor/camera — used only when
+  // the app runs inside the native Capacitor WebView. On web we fall back to the UI.
+  const captureNativeImage = async (source: CameraSource) => {
+    if (!Capacitor.isNativePlatform()) return;
+    playSoundEffect('select');
+    setProofMenu(null);
+    setProofWarning(null);
+    try {
+      const photo = await CapCamera.getPhoto({
+        resultType: CameraResultType.DataUrl,
+        source,
+        quality: 85,
+        width: 1400,
+        height: 1400,
+        correctOrientation: true,
+        saveToGallery: false,
+      });
+      if (photo?.dataUrl) {
+        setProofMedia({ kind: 'image', url: photo.dataUrl });
+        playSoundEffect('success');
+      }
+    } catch (err) {
+      const e = err as { code?: string; message?: string };
+      // User dismissed the native camera / gallery → no error to show
+      if (e?.code === 'userCancelledPhotos' || e?.code === 'userCancelled') return;
+      console.warn('Native capture error', e);
+      setProofWarning(
+        lang === 'FR'
+          ? "Impossible d'ouvrir l'appareil photo / la galerie. Vérifiez les permissions."
+          : 'Could not open camera / gallery. Please check permissions.'
+      );
+    }
+  };
+
+  // Camera / Gallery: image file picked
+  const handleProofImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = '';
+    if (!file) return;
+    try {
+      const compressed = await compressAndResizeImage(file, 900, 900, 0.85);
+      setProofMedia({ kind: 'image', url: compressed, name: file.name });
+      setProofMenu(null);
+      setProofWarning(null);
+      playSoundEffect('success');
+    } catch (err) {
+      console.warn('Erreur compression preuve image', err);
+      setProofWarning(lang === 'FR' ? "Impossible de charger cette image. Réessayez." : 'Could not load this image. Please retry.');
+    }
+  };
+
+  // Camera / Gallery: video file picked or recorded
+  const handleProofVideoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = '';
+    if (!file) return;
+    // Guard against huge files (data URLs would blow up memory)
+    if (file.size > 35 * 1024 * 1024) {
+      setProofWarning(
+        lang === 'FR'
+          ? 'Vidéo trop lourde (max 35 Mo). Choisissez une vidéo plus courte ou légère.'
+          : 'Video too large (max 35 MB). Pick a shorter or lighter video.'
+      );
+      playSoundEffect('fail');
+      return;
+    }
+    try {
+      const url = await readFileAsDataUrl(file);
+      setProofMedia({ kind: 'video', url, name: file.name });
+      setProofMenu(null);
+      setProofWarning(null);
+      playSoundEffect('success');
+    } catch (err) {
+      console.warn('Erreur lecture preuve vidéo', err);
+      setProofWarning(lang === 'FR' ? 'Impossible de lire cette vidéo. Réessayez.' : 'Could not read this video. Please retry.');
+    }
+  };
+
   const handleSubmitPlayerAnswer = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Mandatory visual proof for Action (Moument): cannot submit without it
+    if (activeType === 'action' && !proofMedia) {
+      playSoundEffect('fail');
+      setProofWarning(
+        lang === 'FR'
+          ? 'Une preuve visuelle (photo ou vidéo) est obligatoire pour valider ton action. Ajoute-la avant de soumettre.'
+          : 'Visual proof (photo or video) is required to validate your dare. Attach it before submitting.'
+      );
+      setProofMenu('cam');
+      return;
+    }
+
     if (!playerAnswer.trim()) return;
 
     // Content moderation check (Section 9.1)
@@ -627,6 +776,30 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
     setAnswerWarning(null);
 
     playSoundEffect('select');
+
+    // Notify participants in the room chat when a visual proof was attached
+    if (proofMedia) {
+      const activePlayer = players.find((p) => p.isTurn) || players[0];
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `msg-${Date.now()}`,
+          senderId: 'system',
+          senderName: 'Système',
+          senderAvatar: '',
+          text: proofMedia.kind === 'video'
+            ? (lang === 'FR'
+                ? `🎥 ${activePlayer.name} a joint une vidéo de son ${activeType === 'action' ? 'action' : 'réponse'} comme preuve.`
+                : `🎥 ${activePlayer.name} attached a video proof${activeType === 'action' ? ' of their dare' : ' of their answer'}.`)
+            : (lang === 'FR'
+                ? `📷 ${activePlayer.name} a joint une photo de son ${activeType === 'action' ? 'action' : 'réponse'} comme preuve.`
+                : `📷 ${activePlayer.name} attached a photo proof${activeType === 'action' ? ' of their dare' : ' of their answer'}.`),
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isSystem: true,
+        },
+      ]);
+    }
+
     // Start vote with simulated baseline votes
     setVotesOk(1);
     setVotesNotOk(1);
@@ -733,6 +906,7 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
       setVotesOk(1);
       setVotesNotOk(1);
       setUserVoted(null);
+      resetProof();
       return;
     }
 
@@ -751,6 +925,7 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
     setUserVoted(null);
     setVotesOk(1);
     setVotesNotOk(1);
+    resetProof();
 
     // Rotate turn to next player
     setPlayers((prev) => {
@@ -1385,6 +1560,186 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
                       )}
                     </div>
 
+                    {/* ── VISUAL PROOF (photo/video) for BOTH Action (Moument) and Truth (Gbê) ──
+                        Mandatory for Action, optional for Truth */}
+                    <div className="rounded-xl sm:rounded-2xl border border-dashed border-[#FF7A1A]/45 bg-[#06170F] p-3 space-y-2.5 animate-in fade-in duration-150">
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="text-[10px] font-black uppercase tracking-wider block font-mono">
+                            <span className={activeType === 'action' ? 'text-[#FF7A1A]' : 'text-emerald-400'}>
+                              {activeType === 'action'
+                                ? (lang === 'FR' ? 'PREUVE VISUELLE (OBLIGATOIRE) :' : 'VISUAL PROOF (REQUIRED):')
+                                : (lang === 'FR' ? 'AJOUTER UNE PREUVE VISUELLE (OPTIONNEL) :' : 'ADD VISUAL PROOF (OPTIONAL):')}
+                            </span>
+                          </label>
+                          {proofMedia && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-300 bg-[#0b2e1e] border border-[#1b5638] px-2 py-0.5 rounded-full font-mono uppercase tracking-wide">
+                              <Check className="w-3 h-3" />
+                              {proofMedia.kind === 'video'
+                                ? (lang === 'FR' ? 'Vidéo jointe' : 'Video attached')
+                                : (lang === 'FR' ? 'Photo jointe' : 'Photo attached')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-emerald-300/70 leading-snug">
+                          {activeType === 'action'
+                            ? (lang === 'FR'
+                                ? 'La preuve est obligatoire pour valider ton action : prends une photo ou filme en direct (caméra), ou choisis une image/vidéo depuis ta galerie pour prouver ton défi aux participants.'
+                                : 'Proof is required to validate your dare: take a photo or record live (camera), or pick an image/video from your gallery to prove your dare to participants.')
+                            : (lang === 'FR'
+                                ? 'Facultatif : joins une photo ou une vidéo à l’appui de ta vérité/réponse pour renforcer ta preuve devant les participants.'
+                                : 'Optional: attach a photo or video to back up your truth/answer as extra proof in front of participants.')}
+                        </p>
+                        {activeType === 'action' && !proofMedia && (
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#FF8A3D] font-mono">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{lang === 'FR' ? 'Aucune preuve jointe : une preuve est requise pour soumettre ton action.' : 'No proof attached: proof is required to submit your dare.'}</span>
+                          </div>
+                        )}
+
+                        {proofMedia ? (
+                          <div className="relative overflow-hidden rounded-xl border border-[#164830] bg-black">
+                            {proofMedia.kind === 'image' ? (
+                              <img src={proofMedia.url} alt="Preuve" className="w-full max-h-56 object-contain" />
+                            ) : (
+                              <video src={proofMedia.url} controls playsInline className="w-full max-h-64" />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playSoundEffect('click');
+                                resetProof();
+                              }}
+                              title={lang === 'FR' ? 'Retirer la preuve' : 'Remove proof'}
+                              className="absolute top-2 right-2 p-2 rounded-full bg-black/70 hover:bg-red-600 text-white border border-white/20 shadow-lg active:scale-95 transition-all"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                            {proofMedia.name && (
+                              <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/70 text-white text-[10px] font-mono max-w-[75%] truncate">
+                                {proofMedia.name}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            {proofWarning && (
+                              <div className="p-2 bg-rose-950/90 border border-rose-700 text-rose-200 text-[11px] rounded-xl flex items-start gap-1.5 animate-in fade-in duration-150">
+                                <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
+                                <span className="font-medium leading-tight">{proofWarning}</span>
+                              </div>
+                            )}
+
+                            {/* Source selection: Caméra / Galerie */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSoundEffect('select');
+                                  setProofMenu((m) => (m === 'cam' ? null : 'cam'));
+                                  setProofWarning(null);
+                                }}
+                                className={`flex items-center justify-center gap-2 py-2.5 px-2 rounded-xl border font-black text-[11px] transition-all ${
+                                  proofMenu === 'cam'
+                                    ? 'bg-[#C94700] border-[#FFA559] text-white shadow-md'
+                                    : 'bg-[#0b2e1e] hover:bg-[#0f3d29] border-[#1b5638] text-emerald-200'
+                                }`}
+                              >
+                                <Camera className="w-4 h-4" />
+                                <span>{lang === 'FR' ? 'CAMÉRA' : 'CAMERA'}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSoundEffect('select');
+                                  setProofMenu((m) => (m === 'gal' ? null : 'gal'));
+                                  setProofWarning(null);
+                                }}
+                                className={`flex items-center justify-center gap-2 py-2.5 px-2 rounded-xl border font-black text-[11px] transition-all ${
+                                  proofMenu === 'gal'
+                                    ? 'bg-[#0f7d57] border-[#34D399] text-white shadow-md'
+                                    : 'bg-[#0b2e1e] hover:bg-[#0f3d29] border-[#1b5638] text-emerald-200'
+                                }`}
+                              >
+                                <ImageIcon className="w-4 h-4" />
+                                <span>{lang === 'FR' ? 'GALERIE' : 'GALLERY'}</span>
+                              </button>
+                            </div>
+
+                            {/* Sub-options revealed for the chosen source */}
+                            {proofMenu === 'cam' && (
+                              <div className="grid grid-cols-2 gap-2 animate-in fade-in zoom-in-95 duration-100">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (Capacitor.isNativePlatform()) {
+                                      captureNativeImage(CameraSource.Camera);
+                                    } else {
+                                      playSoundEffect('select');
+                                      setProofMenu(null);
+                                      setIsProofCameraOpen(true);
+                                    }
+                                  }}
+                                  className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-xl bg-[#04140D] hover:bg-[#0b2e1e] border border-[#1b5638] hover:border-[#FF7A1A] text-white transition-all"
+                                >
+                                  <span className="w-8 h-8 rounded-full bg-[#C94700] flex items-center justify-center text-lg">📷</span>
+                                  <span className="text-[10px] font-black text-emerald-200">{lang === 'FR' ? 'Prendre une photo' : 'Take a photo'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    playSoundEffect('select');
+                                    setProofMenu(null);
+                                    camVideoRef.current?.click();
+                                  }}
+                                  className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-xl bg-[#04140D] hover:bg-[#0b2e1e] border border-[#1b5638] hover:border-[#10B981] text-white transition-all"
+                                >
+                                  <span className="w-8 h-8 rounded-full bg-[#C94700] flex items-center justify-center text-lg">🎥</span>
+                                  <span className="text-[10px] font-black text-emerald-200">{lang === 'FR' ? 'Enregistrer une vidéo' : 'Record a video'}</span>
+                                </button>
+                              </div>
+                            )}
+
+                            {proofMenu === 'gal' && (
+                              <div className="grid grid-cols-2 gap-2 animate-in fade-in zoom-in-95 duration-100">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    playSoundEffect('select');
+                                    setProofMenu(null);
+                                    if (Capacitor.isNativePlatform()) {
+                                      captureNativeImage(CameraSource.Photos);
+                                    } else {
+                                      galImageRef.current?.click();
+                                    }
+                                  }}
+                                  className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-xl bg-[#04140D] hover:bg-[#0b2e1e] border border-[#1b5638] hover:border-[#FF7A1A] text-white transition-all"
+                                >
+                                  <span className="w-8 h-8 rounded-full bg-[#0f7d57] flex items-center justify-center text-lg">🖼️</span>
+                                  <span className="text-[10px] font-black text-emerald-200">{lang === 'FR' ? 'Choisir une image' : 'Choose an image'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    playSoundEffect('select');
+                                    setProofMenu(null);
+                                    galVideoRef.current?.click();
+                                  }}
+                                  className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-xl bg-[#04140D] hover:bg-[#0b2e1e] border border-[#1b5638] hover:border-[#10B981] text-white transition-all"
+                                >
+                                  <span className="w-8 h-8 rounded-full bg-[#0f7d57] flex items-center justify-center text-lg">🎬</span>
+                                  <span className="text-[10px] font-black text-emerald-200">{lang === 'FR' ? 'Choisir une vidéo' : 'Choose a video'}</span>
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Hidden file inputs for capture / gallery */}
+                        <input ref={camVideoRef} type="file" accept="video/*" capture className="hidden" onChange={handleProofVideoFile} />
+                        <input ref={galImageRef} type="file" accept="image/*" className="hidden" onChange={handleProofImageFile} />
+                        <input ref={galVideoRef} type="file" accept="video/*" className="hidden" onChange={handleProofVideoFile} />
+                      </div>
+
                     <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-[#143B28]">
                       <button
                         type="button"
@@ -1397,10 +1752,24 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
 
                       <button
                         type="submit"
-                        className="py-3 px-5 sm:px-6 bg-gradient-to-r from-[#9E3500] via-[#C94700] to-[#9E3500] hover:from-[#B84000] hover:to-[#B84000] text-white font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl shadow-[0_4px_20px_rgba(201,71,0,0.35)] border border-[#FFA559]/50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+                        disabled={activeType === 'action' && !proofMedia}
+                        className={`py-3 px-5 sm:px-6 font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 whitespace-nowrap transition-all ${
+                          activeType === 'action' && !proofMedia
+                            ? 'bg-[#123024] border border-[#1b5638] text-emerald-500/50 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-[#9E3500] via-[#C94700] to-[#9E3500] hover:from-[#B84000] hover:to-[#B84000] text-white shadow-[0_4px_20px_rgba(201,71,0,0.35)] border border-[#FFA559]/50 active:scale-[0.98]'
+                        }`}
+                        title={
+                          activeType === 'action' && !proofMedia
+                            ? (lang === 'FR' ? 'Une preuve visuelle est requise pour valider l’action.' : 'Visual proof is required to validate the dare.')
+                            : undefined
+                        }
                       >
                         <Send className="w-4 h-4 shrink-0" />
-                        <span>{lang === 'FR' ? 'SOUMETTRE AUX VOTES' : 'SUBMIT FOR VOTING'}</span>
+                        <span>
+                          {activeType === 'action' && !proofMedia
+                            ? (lang === 'FR' ? 'PREUVE REQUISE' : 'PROOF REQUIRED')
+                            : (lang === 'FR' ? 'SOUMETTRE AUX VOTES' : 'SUBMIT FOR VOTING')}
+                        </span>
                       </button>
                     </div>
                   </form>
@@ -1435,6 +1804,32 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
                       {lang === 'FR' ? 'RÉPONSE DU JOUEUR :' : 'PLAYER ANSWER:'}
                     </span>
                     <p className="text-sm sm:text-base font-black text-white italic">“{playerAnswer}”</p>
+
+                    {/* Visual proof visible to all participants during voting */}
+                    {proofMedia && (
+                      <div className="mt-3 text-left">
+                        <div className="flex items-center justify-center gap-1.5 mb-1.5">
+                          <span className="inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider font-mono px-2.5 py-1 rounded-full bg-[#E65A00]/20 border border-[#E65A00]/50 text-[#FFA559]">
+                            {proofMedia.kind === 'video' ? <Video className="w-3 h-3" /> : <Camera className="w-3 h-3" />}
+                            {proofMedia.kind === 'video'
+                              ? (lang === 'FR' ? 'PREUVE VIDÉO' : 'VIDEO PROOF')
+                              : (lang === 'FR' ? 'PREUVE PHOTO' : 'PHOTO PROOF')}
+                          </span>
+                        </div>
+                        <div className="rounded-xl overflow-hidden border border-[#1b5638] bg-black">
+                          {proofMedia.kind === 'image' ? (
+                            <img src={proofMedia.url} alt="Preuve" className="w-full max-h-80 object-contain" />
+                          ) : (
+                            <video src={proofMedia.url} controls playsInline className="w-full max-h-96" />
+                          )}
+                        </div>
+                        <p className="text-[9px] text-emerald-500/70 text-center mt-1 font-mono">
+                          {lang === 'FR'
+                            ? 'Vérifiez la preuve avant de voter sur l’exécution du défi.'
+                            : 'Review the proof before voting on the dare completion.'}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Community Binary Voting Section (OK / Pas OK) */}
@@ -1682,6 +2077,19 @@ export const MultiView: React.FC<MultiViewProps> = ({ user, challenges = [], onU
           </div>
         </div>
       )}
+      {/* Live device camera for the action proof photo */}
+      <CameraCaptureModal
+        isOpen={isProofCameraOpen}
+        onClose={() => setIsProofCameraOpen(false)}
+        onCapture={handleProofCameraPhoto}
+        title={lang === 'FR' ? 'Caméra — Preuve de l’action' : 'Camera — Dare proof'}
+        subtitle={lang === 'FR'
+          ? 'Cadre la preuve de ton action puis valide la photo'
+          : 'Frame your dare proof then confirm the photo'}
+        aspectRatio="video"
+        darkMode={darkMode}
+      />
+
       {/* Confirmation Modal to permanently close and leave the room (Mandatory Confirmation) */}
       {showLeaveConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">

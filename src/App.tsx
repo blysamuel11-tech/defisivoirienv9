@@ -132,6 +132,23 @@ export default function App() {
     localStorage.setItem('gbe_current_tab', currentTab);
   }, [currentTab]);
 
+  // Online / offline detection — the whole game (Solo, Multi, Avatars,
+  // Bibliothèque and the local AI fallback) runs without any network.
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+
   // Native mobile initialization (Status bar, splash screen, hardware back button)
   useEffect(() => {
     initNativeMobileFeatures({
@@ -267,6 +284,23 @@ export default function App() {
           </>
         )}
       </div>
+
+      {/* Offline pill — reassuring: the game remains fully playable offline */}
+      {!isOnline && (
+        <div
+          role="status"
+          className={`fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium shadow-lg border ${
+            settings.darkMode
+              ? 'bg-[#0a1f16]/95 text-emerald-100 border-emerald-500/30'
+              : 'bg-white/95 text-emerald-800 border-emerald-500/30'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+          {settings.language === 'FR'
+            ? 'Hors ligne — le jeu fonctionne sans connexion'
+            : 'Offline — the game works without connection'}
+        </div>
+      )}
 
       {/* Main Responsive Wrapper */}
       <div className="relative z-10 w-full max-w-4xl px-3 sm:px-6 flex flex-col items-center min-h-screen">

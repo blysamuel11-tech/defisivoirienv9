@@ -64,7 +64,14 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>UIViewControllerBasedStatusBarAppearance</key>
+  <key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+  <!-- Privacy usage descriptions (camera / gallery / microphone) for the visual proof -->
+  <key>NSCameraUsageDescription</key>
+  <string>L'appareil photo est utilisé pour capturer une photo de preuve de votre défi (Action ou Vérité) dans le salon.</string>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>La galerie est utilisée pour choisir une photo ou une vidéo de preuve de votre défi (Action ou Vérité) dans le salon.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Le microphone est utilisé pour enregistrer une vidéo de preuve de votre défi (Action ou Vérité) dans le salon.</string>
 </dict>
 </plist>
