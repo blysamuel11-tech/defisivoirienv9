@@ -106,14 +106,18 @@ disponible.
 - **Android Studio** (fournit le SDK) avec le SDK **API 36** et les **build-tools** installés
 - Variables d'environnement : `ANDROID_HOME` (ou SDK défini dans Android Studio)
 
-### Étapes (méthode simple — script)
+### Étapes (méthode simple — script unique)
+
+Le plus simple : un seul script à la racine enchaîne **tout** (install → build web →
+sync Capacitor → compilation Gradle).
 
 ```bash
-npm install
-npm run build                 # construit le web dans dist/
-npx cap sync android          # synchronise dist/ vers le projet natif
-bash scripts/build-android.sh # génère app-debug.apk (+ app-release-*.apk)
+./build-apk.sh                # APK debug → android/app/build/outputs/apk/debug/app-debug.apk
+./build-apk.sh --release      # APK release (signé si keystore présent, sinon unsigned)
+./build-apk.sh --release --sign   # signé : crée le keystore automatiquement si absent
 ```
+
+*(Équivaut manuellement à `npm run build && npx cap sync android && bash scripts/build-android.sh`.)*
 
 Les APK sont produits dans `android/app/build/outputs/apk/`.
 
