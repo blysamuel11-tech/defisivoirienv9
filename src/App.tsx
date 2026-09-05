@@ -13,7 +13,6 @@ import { BiblioView } from './components/BiblioView';
 import { PlusView } from './components/PlusView';
 import { Footer } from './components/Footer';
 import { MobileInstallModal } from './components/MobileInstallModal';
-import { MobileBottomNav } from './components/MobileBottomNav';
 import { AppSettingsModal } from './components/AppSettingsModal';
 import { initNativeMobileFeatures } from './utils/nativeMobile';
 
@@ -405,16 +404,6 @@ export default function App() {
 
         {/* Global Footer */}
         <Footer />
-
-        {/* Mobile Bottom Navigation Bar (Visible on mobile/tablets when logged in) */}
-        {user.isLoggedIn && (
-          <MobileBottomNav
-            currentTab={currentTab}
-            onSelectTab={setCurrentTab}
-            onOpenInstallModal={() => setIsInstallModalOpen(true)}
-            darkMode={settings.darkMode}
-          />
-        )}
 
         {/* Mobile PWA & Native Install Modal (Android & Apple iOS) */}
         <MobileInstallModal
