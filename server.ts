@@ -149,7 +149,9 @@ Réponds sous le format JSON :
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: { server: httpServer },
+        // The preview proxy does not forward Vite's HMR WebSocket reliably.
+        // Disable the client socket so preview loads without connection errors.
+        hmr: false,
       },
       appType: "spa",
     });
