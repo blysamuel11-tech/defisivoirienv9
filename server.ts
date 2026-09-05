@@ -1,4 +1,5 @@
 import express from "express";
+import { createServer as createHttpServer } from "node:http";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
@@ -23,6 +24,7 @@ function getAiClient(): GoogleGenAI | null {
 
 async function startServer() {
   const app = express();
+  const httpServer = createHttpServer(app);
   const PORT = 3000;
 
   app.use(express.json({ limit: "10mb" }));
@@ -145,7 +147,10 @@ Réponds sous le format JSON :
   // Vite middleware for development vs static in production
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: { server: httpServer },
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -157,7 +162,7 @@ Réponds sous le format JSON :
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Gbê ou Moument server running on http://0.0.0.0:${PORT}`);
   });
 }
